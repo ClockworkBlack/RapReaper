@@ -1,0 +1,141 @@
+RapReaper - setting up your microphone and audio interface on a Mac (any brand)
+==============================================================================
+
+Who this is for
+---------------
+RapReaper was first used with a Focusrite Scarlett Solo, but it does not care which
+interface or microphone you have. RapReaper never talks to your interface: it works on the
+recordings REAPER has already made and on what REAPER plays back. So all that matters is
+that REAPER can record your voice and that you can hear REAPER. This file gets you there
+with any of these:
+
+  - a USB audio interface: Focusrite (Scarlett, Clarett), PreSonus (AudioBox, Studio),
+    Universal Audio (Volt, Apollo), MOTU (M2, M4), Audient (iD, EVO), Behringer (UMC),
+    Steinberg (UR), Native Instruments (Komplete Audio), Arturia (MiniFuse), SSL (SSL 2),
+    Rode (AI-1), Zoom, M-Audio, Tascam, IK Multimedia and others;
+  - a USB microphone (Shure MV7, Rode NT-USB / PodMic USB, Blue/Logitech Yeti, Audio-Technica
+    AT2020USB, Elgato Wave and others): the microphone is its own small interface;
+  - no interface at all (a headset or the laptop's own microphone): it works, it just
+    sounds worse. Fine for trying RapReaper out.
+
+If your setup already records in another program (FL Studio, Audacity, BandLab, Ableton,
+Pro Tools...), steps 1 and 2 are probably done; start at step 3.
+
+Do this once, before installing RapReaper. It takes about 10 minutes.
+
+
+1. Plug the interface in (a driver is rarely needed on a Mac)
+--------------------------------------------------------------
+  - On a Mac almost every USB interface and USB microphone is "class compliant": plug it in
+    (USB straight into the Mac, or through a powered hub) and macOS knows it. Focusrite says
+    so of every Scarlett; the same holds for PreSonus, Universal Audio Volt, MOTU M series,
+    Audient, Behringer UMC, SSL 2, Arturia MiniFuse, Rode, Shure MV7, Yeti and others.
+  - The maker's app (Focusrite Control / Control 2, Universal Control, UA Connect, MOTU
+    Pro Audio Control ...) is optional: it sets things like Air mode, direct monitor mixes
+    or sample rate from the Mac. Install it from the maker's downloads page if you want it.
+  - A few older or unusual interfaces (some Steinberg, some Native Instruments, some Apollo
+    Thunderbolt units) do need a macOS driver or an app; the maker's downloads page says so.
+    If it asks to allow a "system extension", that is System Settings > Privacy & Security.
+  - Microphone permission: the first time REAPER records, macOS asks "REAPER would like to
+    access the microphone". Click Allow. (Later: System Settings > Privacy & Security >
+    Microphone, REAPER on.)
+
+
+2. Point REAPER at the interface
+--------------------------------
+  In REAPER: Options > Preferences (Cmd+,) > Audio > Device.
+  - Audio system: Core Audio (the only choice on a Mac, and the right one).
+  - Input device / Output device: pick your interface (or USB microphone). Pick the
+    interface for both if it has a headphone jack; a USB microphone with no headphone jack:
+    input = the microphone, output = your headphones or "MacBook Speakers".
+  - Input range: tick "Enable inputs" and make sure all the interface's inputs are in the
+    range (first input to last input).
+  - Sample rate: 48000 (or 44100; either is fine, just keep it the same for the whole
+    song). Tick "Request sample rate" if it is offered.
+  - Block size / buffer: 256 samples to start. Recording with crackles or dropouts: raise it
+    (512). Your voice in the headphones sounds late: lower it (128) or use the interface's
+    direct monitoring (step 4). When only mixing with RapReaper, 512 or 1024 is fine.
+  - Click Apply, then OK. If REAPER says the device could not be opened, see "Troubleshooting".
+
+  Two inputs and two outputs on different devices (a USB microphone plus the Mac's speakers)
+  work in REAPER directly; an "aggregate device" (Audio MIDI Setup app) is only needed when
+  you want two interfaces to record at once.
+
+
+3. Set up a track to record your voice
+--------------------------------------
+  - Insert > New track (Cmd+T). Name it (double-click the name area), e.g. "Vocal 1".
+  - Click the record-input box on the track (it says "Input: ..." in the track panel or
+    shows a small meter) and choose  Input: Mono > Input N  where N is the socket your
+    microphone is plugged into.
+      * Interfaces number their inputs from the front, left to right, in most cases, but not
+        always. Speak into the mic and watch which input's meter moves (REAPER's mixer, or the
+        interface's own software). Example: the 4th Gen Scarlett Solo's microphone socket is
+        Input 2 on the back; on the 1st-3rd Gen Solo it is Input 1.
+      * A USB microphone usually shows as Input 1 (sometimes Input 1 and 2 with the same
+        signal: pick Mono > Input 1).
+  - Always Mono for one microphone. A mic recorded onto a stereo input lands on one side
+    only; RapReaper notices that and tells you how to fix the take, but it is easier to get
+    right here.
+  - Arm the track (the round red button) and turn on record monitoring (the speaker icon next
+    to it) only if you are NOT using direct monitoring (step 4), or you will hear yourself
+    twice.
+
+
+4. Gain, phantom power and monitoring
+-------------------------------------
+  - Condenser microphone (most studio mics in the 100-300 range, e.g. AT2020, Rode NT1,
+    MXL 990): switch on 48V / phantom power on the interface for that input. Dynamic
+    microphones (SM58, SM7B, MV7 on XLR, PodMic) do not need it. A ribbon mic: leave it off
+    unless the maker says otherwise.
+  - Gain: rap your loudest line and turn the input's gain knob until REAPER's track meter
+    peaks around -12 dB and never above -6 dB. If the interface has a ring or light that
+    turns red, it must stay green/amber. Too hot cannot be fixed afterwards (it clips); a bit
+    quiet is fine, RapReaper brings it up. A quiet dynamic mic (SM7B) on a small interface may
+    need a lot of gain or an inline booster (Cloudlifter, FetHead); RapReaper can measure the
+    hiss later and tell you if that is a problem.
+  - USB microphones have the gain on the mic itself or in the maker's app.
+  - Monitoring (hearing yourself while recording): most interfaces have a "direct monitor"
+    button or a mix knob: that gives zero delay, and REAPER's monitoring should then stay off.
+    Without direct monitoring, use REAPER's record monitoring with a small buffer (step 2).
+  - Headphones, not speakers, while recording: the beat must not leak into the microphone.
+
+
+5. Check it, then install RapReaper
+-----------------------------------
+  - Record 10 seconds of yourself rapping over silence, play it back. You should hear it in
+    the middle (not only in one ear), with no crackles.
+  - Then follow "Install" in README.txt. Once RapReaper is installed and your first take is in
+    a project, ask Claude:  Run the RapReaper self-test  and then  check my recording.
+    RapReaper measures the take and tells you in plain words if the level, a one-sided input,
+    hum, hiss or room echo needs fixing at the recording stage, whatever your interface.
+
+
+Troubleshooting
+---------------
+  "The device could not be opened" / no device to choose
+      Another program has the interface (a browser tab, Discord, another DAW, the maker's
+      software in a standalone mode). Close it and click Apply again. For ASIO, only one
+      program at a time can use most drivers. Unplug and replug the interface; reinstall the
+      driver if it still does not show.
+  No meter moves when I speak
+      Wrong input in step 3, phantom power off for a condenser, the gain at zero, the
+      interface's own input switch on "Line/Inst" instead of "Mic", or REAPER not allowed to
+      use the microphone (System Settings > Privacy & Security > Microphone).
+  My voice is only in one ear
+      The track's input is stereo. Set it to Mono > Input N (step 3). For takes already
+      recorded, RapReaper's check tells you how to fix them.
+  Crackles, pops, dropouts
+      Raise the buffer (step 2); plug the interface straight into the Mac or into a powered
+      hub; on a laptop keep it plugged into power while recording; close heavy programs.
+  The recording plays back too fast/slow or at the wrong pitch
+      The interface and REAPER disagree on the sample rate. Set the same rate in REAPER (step 2)
+      and in the interface's own software if it has a setting.
+  I hear myself twice / with an echo
+      Direct monitoring and REAPER's record monitoring are both on. Turn one off (step 3/4).
+  Measurements in RapReaper come back silent
+      Not an interface problem: REAPER's "media offline when inactive" preference. The installer
+      and the self-test switch it off (README.txt, "Install").
+
+This is the Mac version of RapReaper. The Windows version has its own copy of this file, with
+the ASIO and WASAPI steps Windows needs.

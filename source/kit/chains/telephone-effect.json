@@ -1,0 +1,81 @@
+{
+ "name": "telephone-effect",
+ "version": 1,
+ "role": "vocal",
+ "notes": "The 'phone call / old radio' effect: only the middle of the voice is kept (about 400 Hz to 3 kHz), squeezed hard and pushed forward around 1.5 kHz. Use it on a COPY of a line or on an ad-lib track, not on the whole lead.",
+ "slots": [
+  {
+   "slot": "hpf",
+   "add": [
+    "JS:sstillwell/hpflpf",
+    "JS: RBJ Highpass/Lowpass Filters"
+   ],
+   "bypassed": false,
+   "params": {
+    "HPF": "400 Hz",
+    "LPF": "3000 Hz",
+    "Gain": "0 dB"
+   }
+  },
+  {
+   "slot": "hpf2",
+   "add": [
+    "JS:sstillwell/hpflpf",
+    "JS: RBJ Highpass/Lowpass Filters"
+   ],
+   "bypassed": false,
+   "params": {
+    "HPF": "400 Hz",
+    "LPF": "3000 Hz",
+    "Gain": "0 dB"
+   }
+  },
+  {
+   "slot": "comp1",
+   "add": [
+    "ReaComp (Cockos)",
+    "ReaComp"
+   ],
+   "bypassed": false,
+   "params": {
+    "Ratio": "8",
+    "Attack": "1 ms",
+    "Release": "60 ms",
+    "Knee": "0 dB",
+    "RMS size|RMS": "5 ms",
+    "Thresh|Threshold": "-28 dB",
+    "Wet": "5 dB",
+    "Pre-comp|Precomp": "0 ms",
+    "AutoMkUp|Auto make-up|Auto makeup|Auto Make Up Gain|Auto make up gain": "off"
+   }
+  },
+  {
+   "slot": "eq_tone",
+   "add": [
+    "ReaEQ (Cockos)",
+    "ReaEQ"
+   ],
+   "bypassed": false,
+   "eq_moves": [
+    {
+     "kind": "bell",
+     "hz": 1500,
+     "db": 5.0,
+     "bw": 1.0
+    }
+   ]
+  },
+  {
+   "slot": "trim",
+   "add": [
+    "JS:utility/volume_pan",
+    "JS: Volume/Pan Smoother"
+   ],
+   "bypassed": false,
+   "params": {
+    "Volume": "-2 dB",
+    "Pan": "0"
+   }
+  }
+ ]
+}

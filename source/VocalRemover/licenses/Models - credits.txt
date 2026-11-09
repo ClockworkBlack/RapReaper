@@ -1,0 +1,65 @@
+MODELS
+======
+
+models\MelRoformer-KimFT2-int8.onnx   "Kim Mel-Band Roformer FT2"       (the default since 2.0)
+    Kimberley Jensen's Mel-Band Roformer vocal model (MIT licence,
+    https://huggingface.co/KimberleyJSN/melbandroformer), fine-tuned by unwa
+    (https://huggingface.co/pcunwa/Kim-Mel-Band-Roformer-FT, file kimmel_unwa_ft2.ckpt,
+    config config_kimmel_unwa_ft.yaml: dim 384, depth 6, 60 mel bands).
+    SHA-256 of the ONNX file   f81d9265cf57b66808db38d72ae136f3d74f3888f642e085478288f774b5a0d4
+    Architecture: Mel-Band RoPE Transformer (Mel-Band RoFormer), Wang, Lu et al.,
+    ByteDance, 2023 (arXiv 2310.01809), after the Band-Split RoFormer (arXiv 2309.02612).
+    Open implementations: Phil Wang (lucidrains/BS-RoFormer, MIT) and Roman Solovyev
+    (ZFTurbo/Music-Source-Separation-Training, MIT).
+    The ONNX file contains the unchanged published weights, stored as 8-bit integers, in a
+    graph written for this program by source\tools\build_roformer_onnx.py (no PyTorch
+    needed: source\tools\torch_ckpt.py reads the checkpoint). Running that tool on the
+    public checkpoint reproduces the file byte for byte.
+
+models\MelRoformer-KimFT2-fp16.onnx   the same network for the graphics processor
+    Made on this computer by the program itself from the int8 file (internal\onnxconv):
+    the quantised weights multiplied back out and stored as 16-bit floats, matrix products
+    in float16, everything else float32. Deterministic, so its checksum is known:
+    SHA-256   8c5aa71978d478d5a20b657ec9ae1b411b74c548d2fd81b2239cbf2a829bcc91
+
+models\BS-Roformer-1297-int8.onnx   "BS-Roformer-Viperx-1297"       (version 1.3's default)
+    checkpoint model_bs_roformer_ep_317_sdr_12.9755.ckpt by viperx
+    SHA-256 of the checkpoint 5b84f37e8d444c8cb30c79d77f613a41c05868ff9c9ac6c7049c00aefae115aa
+    SHA-256 of the ONNX file   a31b1fed94ed5fcf3c8ef41f9cf55a31ba6da2f1028d91d296907ced99b23cdf
+    Architecture: Band-Split RoPE Transformer (BS-RoFormer), Lu, Wang et al., ByteDance,
+    2023 (arXiv 2309.02612). Built by the earlier build_bs_onnx.py; today's
+    build_roformer_onnx.py gives a slightly different file from this checkpoint, so this
+    model is delivered as a file, not built on your computer.
+
+Licences of the model files: Kimberley Jensen's Mel-Band Roformer is published under the
+MIT licence. unwa's fine-tune (Kim FT2), viperx's BS-Roformer and the two MDX-Net files
+were published without a stated licence. They are therefore not passed on with RapReaper's
+source: RapReaper's "Get Vocal Remover Model" downloads Kim FT2 from unwa's own page for
+each person, and the installer builds the ONNX file from it.
+
+models\UVR-MDX-NET-Inst_HQ_4.onnx   "UVR-MDX-NET Inst HQ 4"
+    by the Ultimate Vocal Remover team (Anjok07 and aufr33)
+    SHA-256 3c4b5b9b05090fdf238f38ba5046813982d50e2a652e9cb3324ea79720c3c9c8
+
+models\Kim_Vocal_2.onnx             "Kim Vocal 2"
+    by KimberleyJSN
+    SHA-256 ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b
+
+The two MDX-Net files and the BS-Roformer checkpoint come from the public model collection
+of the Ultimate Vocal Remover project (unchanged copies):
+    https://github.com/TRvlvr/model_repo/releases/tag/all_public_uvr_models
+    https://github.com/Anjok07/ultimatevocalremovergui   (MIT licence)
+
+The UVR project asks third-party applications that use its models to credit UVR and its
+developers. This program does so gladly: the quality of its results is the work of the
+people who trained these models.
+
+The processing parameters for each MDX model (FFT size, frequency range, level
+compensation, window length and overlap) come from the UVR model database:
+    https://github.com/TRvlvr/application_data
+The Roformer models run on 8-second windows (hop 441, 801 frames) with one-second
+crossfades, or half-window steps in the "thorough" modes, as in the reference inference.
+
+Measurements (source\tools\eval_separation.py): three test songs of MUSDB18-HQ (Rafii,
+Liutkus, Stöter, Mimilakis, Bittner, 2019), 60 seconds each around the loudest singing,
+against their true separate tracks. The numbers are in README.txt.

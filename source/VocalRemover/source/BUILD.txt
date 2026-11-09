@@ -1,0 +1,64 @@
+BUILDING VOCAL REMOVER FROM SOURCE
+==================================
+
+You do not need to do this to use the program. It is here so that anyone can
+check what the program does and rebuild it.
+
+Requirements: Go 1.27 or newer (https://go.dev/dl/). No other tools, no C
+compiler. The released programs (2.0.3) are built with Go 1.27.3: that
+version, with the commands below, makes files identical byte for byte to the
+ones shipped. All third-party code is included in the "vendor" folder, so the
+build does not download anything.
+
+In a command prompt (or Terminal) inside this folder:
+
+    Windows:   set CGO_ENABLED=0
+               go build -mod=vendor -trimpath -buildvcs=false -ldflags "-s -w" -o VocalRemover.exe .
+
+    Mac:       CGO_ENABLED=0 go build -mod=vendor -trimpath -buildvcs=false -ldflags "-s -w" -o VocalRemover .
+               (builds for the Mac you are on: Apple chip or Intel)
+
+    Any system can build for the others:
+               GOOS=windows GOARCH=amd64 ... -o VocalRemover.exe .
+               GOOS=darwin  GOARCH=arm64 ... -o VocalRemover .     (Macs with an Apple chip)
+               GOOS=darwin  GOARCH=amd64 ... -o VocalRemover .     (Intel Macs)
+
+Put the resulting program next to the ONNX Runtime library and the "models" folder. The
+program accepts only these libraries, checked by their SHA-256 (engine.go), all unchanged
+from github.com/microsoft/onnxruntime/releases:
+    Windows x64          onnxruntime.dll       from onnxruntime-win-x64-1.30.0.zip
+    Mac, Apple chip      libonnxruntime.dylib  libonnxruntime.1.30.0.dylib from onnxruntime-osx-arm64-1.30.0.tgz
+    Mac, Intel           libonnxruntime.dylib  libonnxruntime.1.23.2.dylib from onnxruntime-osx-x86_64-1.23.2.tgz
+                         (the last version Microsoft built for Intel Macs)
+
+Checks and tests (signal processing, model conversion, the audio decoders' handling of damaged
+files, file names, settings; none of them needs the ONNX Runtime library or the models):
+
+    go vet -mod=vendor ./...
+    go test -mod=vendor ./...
+
+Layout
+    main.go, server.go, engine.go, output.go   the program, its local window server, the graphics-processor
+                                               test and the one settings file
+    platform_windows.go, platform_darwin.go,
+    platform_other.go                          the few operating-system specific parts
+    ui/                                        the window (HTML, CSS, JavaScript), built into the program
+    internal/separate/                         running the models (Roformer and MDX-Net families), blending,
+                                               time spans, the graphics-processor fallback
+    internal/onnxconv/                         makes the float16 graphics-processor model file from the int8
+                                               processor file (a small ONNX protobuf rewriter)
+    internal/dsp/                              FFT, spectrogram transforms, sample-rate conversion
+    internal/audio/                            WAV reading and writing, MP3, FLAC and Ogg Vorbis loading
+    internal/ort/                              minimal binding to the ONNX Runtime C API (no cgo), including
+                                               the DirectML / CoreML provider calls
+    internal/mp3/                              MP3 decoder (go-mp3, modified: see MODIFICATIONS.md)
+    vendor/                                    third-party code: purego (calls into the runtime library),
+                                               mewkiz/flac + icza/bitio (FLAC), jfreymuth/oggvorbis + vorbis
+    tools/                                     Python tools that build the model files from the public
+                                               checkpoints (not needed to build or run the program):
+                                               build_roformer_onnx.py (+ onnxwriter.py, torch_ckpt.py),
+                                               eval_separation.py and roformer_numpy.py (the measurements in
+                                               the README)
+
+The program makes no outgoing network connections. The only networking code
+is the local server in server.go, which listens on 127.0.0.1 only.

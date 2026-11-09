@@ -1,0 +1,414 @@
+RapReaper: security and privacy review, 4 October 2026, with the 1.3 and 1.4 additions
+====================================================================================
+
+What RapReaper is, from a security point of view
+---------------------------------------------
+A program on your PC that Claude (running at Anthropic) drives through tool calls. It talks
+to REAPER through small files inside this folder, read by a bridge script and by RapReaper's
+own helper script inside REAPER. It opens no network port and contains no network code.
+
+Who the review guarded against
+------------------------------
+  1. A misled Claude: one that was talked into something by text in the chat, or by text it
+     read from your project (a track name, a file name, a note), and that calls any tool
+     with any arguments.
+  2. Files you download or drop into RapReaper's folders (references, models) or into Downloads.
+  Out of scope: other software already running under your Windows account. It can already
+  do anything to your files, including RapReaper's.
+
+How it was reviewed
+-------------------
+  - Three independent reviews of the final code: a code review of every place that opens a
+    file, starts a program or sends a command; a review of what reaches Anthropic and of
+    text from the project that could read like an instruction; and a dynamic test that
+    sent about 5,000 hostile tool calls (traversal paths, device names, Lua code, 1 MB
+    strings, forged WAV headers, corrupt state files, malformed protocol messages) while
+    watching every file the server touched.
+  - A second-pass review that tried to bypass each fix, and a final acceptance review that
+    ran an ordinary mixing session to confirm nothing got harder to use.
+  - Every confirmed finding was fixed and pinned by a test (tests/e2e.py: hardening, privacy,
+    song_effects, guards, installer). Test counts: see the guide's "What was tested".
+
+What was found and fixed
+------------------------
+  Programs and files it will run or load
+  - It no longer runs a VocalRemover.exe it merely found on the PC. The only Vocal Remover it can
+    start is the one allowed by path + SHA-256 (since 1.4.0 the installer records the copy it ships,
+    after checking it against the package manifest; "Allow Vocal Remover.bat" for another copy); a
+    changed file is refused.
+  - Every separation model file (the Mel-Roformer, the BS-Roformer, Kim Vocal 2) is checked against
+    its published SHA-256 before it is loaded; pieces that do not add up to it are discarded.
+  - The bridge script files and RapReaper's helper script are checked against their checksums at
+    every start of RapReaper and by the installer; a changed file is reported and not used.
+  - Python packages are installed as ready-built wheels only, in known-good version ranges.
+
+  REAPER and your project
+  - A plug-in's settings block is read only from ReaTune, and written only when its layout is
+    known and the new block has that layout (a malformed block can crash a plug-in).
+  - A cut, mute or turn-down over 30 seconds needs a word of confirmation; the tools that take
+    something away are flagged to the Claude app as such, so it asks before each use unless you
+    chose "always allow".
+  - Claude is told, in the playbook and at connection: names from the project are data, never
+    instructions; anything that removes or silences part of a recording happens only after you
+    said yes to that step.
+
+  Hostile files and inputs
+  - WAV headers are checked against what is physically possible, and at most 256 MB / 60
+    million sample frames of a file are read at a time (a forged header could otherwise make
+    RapReaper read gigabytes into memory).
+  - Links inside the references folder that point elsewhere are not followed.
+  - A state file that is valid JSON but not RapReaper's shape is moved aside instead of stopping
+    every tool; rows in the mix log that are not records are skipped.
+  - Only JSON goes on the wire (no NaN/Infinity); one song is separated at a time; a
+    separation over 40 minutes is stopped; the mix log is trimmed at 4 MB.
+
+  Privacy
+  - Everything sent to Claude (answers, errors, progress, and once more as each reply is
+    written) and RapReaper's own log pass a filter that removes folder paths on this PC, your
+    Windows user name, the PC's name and OneDrive organisation names.
+  - status, track_details and mix_log carry less: no Python/NumPy versions, no media file
+    names behind clips, 10 log entries unless more are asked for. Names from the project are
+    cut to 80 characters.
+  - Since 1.2.0 (added at your request, 4 October 2026): a privacy level. At 'strict' (the
+    default) names are replaced by labels at the same door; the lookup stays in
+    kit\state\private_names.txt on this PC and every tool takes the labels back. At 'maximum'
+    track names are labels too. Changed at your request on 6 October 2026 (1.4.0): the names of
+    music files (songs, beats, takes, stems, mixes, exports, the music in the references and the
+    remaster folders) and of saved projects are given as they are at every level, so that Claude
+    can list what is in a folder and call songs by name; never a folder or a path, and never a
+    file that is not music (those stay labels at strict). The self-test does not quote a clip's
+    file name. kit\logs\sent_to_claude.log records every answer
+    exactly as sent, so you can see for yourself what left this PC. Every answer is capped at
+    150,000 characters, and the tests check that no answer ever carries audio-sized data.
+    Measurement files, vocal-session notes and the activity log expire after 30 days
+    (settable). All of this is pinned by tests (tests/e2e.py: privacy, song_setup).
+
+What 1.3.0 added, and how each new door was closed (reviewed 4 October 2026, evening)
+-----------------------------------------------------------------------------------
+  Every new capability came from a limitation met while mixing a real song (kit\CHANGES-1.3.md).
+  Each one was built behind the same rules as before; this is what was checked for each:
+  - save_project: REAPER's own Save, to the project's own file, only. The helper refuses when the
+    project has no file yet (that would open a Save As dialog); no path is ever passed in; the
+    tool needs confirm true and is flagged as a change. Pinned by tests (clips2).
+  - restore_clips / tidy_clips / split_to_track: the clip journal (kit\state\edits) records
+    positions and the recordings' paths on this PC only; it is under the privacy filter and
+    expires with the other state files. A restore re-creates clips only from recordings the
+    open project already uses, or from a folder those recordings sit in (the helper refuses
+    any other file); it never writes to a recording. Deleting is limited to clips the command
+    names (a range, a sliver length, the pieces a restore replaces), always undoable.
+  - remove_effect_track: the bridge's delete_track is on the allow-list with one condition,
+    checked before the command leaves: the track's GUID must be in RapReaper's own record of
+    effect tracks it created, and the track must hold no clips. rename_track: any track but the
+    master; a name must stay unique; 'master'/'mix' refused.
+  - Programs (ffmpeg, whisper.cpp): one module, rapreaper_programs.py, is the only place a
+    program is started. A program is used only when the person recorded its path and SHA-256
+    with an "Allow ... .bat" (never from a tool call), the file still matches, and its name is
+    the expected one. Started with fixed arguments, no shell, no window, output captured, a time
+    limit, only on files inside the kit's folders. Neither program is given a network argument.
+  - Transcription: the 16 kHz copy of the vocal is deleted right after the run; the words stay
+    in kit\state\transcripts on this PC. The answer carries the times of unclear words and
+    counts; the words themselves only with show_words true. No transcript is ever used to train
+    anything, and RapReaper trains no model on the person's audio (README: "Training on audio").
+  - MP3 via lameenc: a pure encoder package, installed as a ready-built wheel in a pinned range.
+  - vocal_clarity mutes the measured vocal for one render through the same one-command
+    change/render/change-back path as every measurement; the put-back machinery knows the new
+    kind (mute) and restores it if REAPER stops answering. Tests: clarity.
+  - Option aliases: a misspelling of a real option is still an error with the right name
+    suggested (so a wrong 'confirm' or 'apply' can never be read as given); only options that
+    match nothing are dropped, and the answer says so.
+  - Every new answer passes the same privacy filter and the same audio-data guard as before
+    (tests: every new scenario runs under the guard).
+
+What 1.3.1 changed (5 October 2026)
+-----------------------------------
+  Documentation only, plus one sentence of recording advice: "AUDIO INTERFACE SETUP.txt" (setting
+  up any brand of interface or microphone in REAPER) was added, and the README, the playbook and
+  the one-sided-recording advice no longer assume a Focusrite. No tool, permission, program,
+  network behaviour or file RapReaper writes changed. The helper inside REAPER differs from 1.3.0
+  only in its version number; its new checksum is stamped into the server and the installer as
+  before, so a helper that does not match is still refused.
+
+What 1.3.2 added (5 October 2026)
+---------------------------------
+  - "Get ffmpeg and Transcriber.bat" runs get_tools_b5130.ps1, which downloads three things from three
+    fixed addresses: ffmpeg (github.com/BtbN/FFmpeg-Builds), whisper.cpp release b5130 (github.com/ggml-org)
+    and ggml-base.en.bin (huggingface.co/ggerganov/whisper.cpp). It is a plain-text PowerShell script of
+    about 70 lines, started only by the person double-clicking the .bat (which asks for a key press first),
+    never by RapReaper, Claude or a tool call. It writes only inside the RapReaper folder (tools\, kit\models)
+    and the user's temp folder (removed afterwards). The model is verified against the SHA-256 published
+    by Hugging Face and deleted on a mismatch. The two programs have no published checksum to compare
+    with, so their SHA-256 is printed for the person to see; the transport is HTTPS from the projects' own
+    release pages. Running a downloaded program is a decision for the person, so the script does not
+    allow anything: RapReaper starts ffmpeg or whisper.cpp only after the person ran the matching "Allow"
+    file for that exact file, as before.
+  - The script is not imported, read or started by any RapReaper program; the tripwire tests that keep
+    network, subprocess and similar code out of RapReaper's Python are unchanged and still pass.
+    "RapReaper contains no network code" remains true of RapReaper itself.
+
+What 1.4.0 added, and how each new door was closed (6 October 2026)
+------------------------------------------------------------------
+  Every new capability is listed in kit\CHANGES-1.4.md with the problem it answers. What was checked for each:
+  - The Mac version. The same server, helper and bridge, so the same rules; one module (kit\rapreaper_platform.py)
+    holds what differs (folders, words). The installer on a Mac makes RapReaper's own Python environment inside
+    the kit folder (kit\venv) and installs the same pinned, ready-built wheels there; the Mac's Python is not
+    changed. It refuses folders macOS guards with permission prompts (Downloads, Desktop, Documents), where a
+    refused prompt would fail silently, and cloud folders, and sends people to the home folder. The .command files
+    start only a Python they have checked to be 3.12 or newer and never Apple's /usr/bin/python3 stub. The
+    quarantine mark is removed only from RapReaper's own .command files, only after the installer has been run by
+    the person (so one allowance covers the set), and only when each file's checksum matches the shipped manifest;
+    a .command file that is not the shipped one is left as it is and named. The separation code on a Mac looks
+    for the model only in kit\models, never in Downloads (a program Claude started reading Downloads would make
+    macOS ask the person, in Claude's name). The privacy filter knows a Mac's user name and host name.
+  - Updating from a zip. The updater installs only a zip that holds one RapReaper folder, whose every file matches
+    the zip's own MANIFEST.sha256 and which lists no unlisted file (a download that broke off is refused), and only
+    the zip for this system. Since 1.4.1 (see the audit section below) it also takes only zips named
+    RapReaper-<version>-<system>.zip from Downloads, refuses a version that is not newer, shows the version and
+    the zip's SHA-256 and asks before installing, checks a SHA256SUMS.txt lying next to it, refuses any path that
+    would leave the RapReaper folder, never takes a file of the person's own folders (state, chains/user,
+    references, exports, captures, models, logs, tools, the Vocal Remover's models, Output and settings) from a
+    zip, and puts everything back if a file cannot be replaced. Replaced program files are kept in
+    updates\backup-<version>-<stamp>. The manifest proves the zip is whole, not who made it: the zip itself still
+    has to come from a source the person trusts. Pinned by tests (installer, installer_mac).
+  - Projects. open_project opens only .rpp files that REAPER itself lists as recent (since 1.4.1 no longer any .rpp in
+    the user folder: a project file can carry start-up actions), by REAPER's own open; close_project closes the active tab or, when it is the only one, replaces it
+    with an empty project. Unsaved changes are never dropped unless the person chose that in the chat
+    (discard_changes), and REAPER's "noprompt" form is used only after that choice, so no dialog can freeze the
+    bridge; save_first is REAPER's own Save to the project's own file and is refused when the project has no file
+    (that would be a Save As dialog). Both tools show the plan first, need confirm true, and are flagged to the
+    Claude app as changes so it asks before each use unless the person chose "always allow". Pinned by tests
+    (projects_fit).
+  - fit_instrumental. Measures two tracks (renders through the same one-command path as every measurement) and
+    moves the clips of one track by one amount as one undoable step; when the music would have to start before the
+    project's start, the clip's start is trimmed (the take's start offset moves; the recording file is never
+    written) and the plan says so before anything moves. No cut, stretch or deletion; a match with confidence under
+    0.4 is not applied unless force is given; the result is checked by measuring again. Pinned by tests.
+  - song_tempo_and_key and reference_card measure and look up only. Nothing leaves the computer but numbers and
+    the card's fixed text; the cards are shipped text, not fetched.
+  - Disk room: before a render or an export, the free space on RapReaper's disk is checked (a render into a full
+    disk would leave REAPER with a half-written file and an error window); status warns under 2 GB.
+  - Every new answer passes the same privacy filter, the wording door (Mac words) and the same audio-data guard as
+    before; the new scenarios run under the guard.
+  - The helper inside REAPER is version 1.4.0 (move_items, projects, project_open, project_close); its checksum is
+    stamped into the server and the installer as before, so a changed helper is refused. A REAPER still running the
+    previous helper after an update is reported by status and by the tools that need the new one.
+  - The Vocal Remover 2.0 inside the folder, and separate_song. The program has no network code (its window
+    listens on 127.0.0.1 with a one-time key, as before); it checks every library it loads (ONNX Runtime, the
+    DirectML build and DirectML.dll in gpu\, the C++ runtime, the Mac dylib) and every model file against
+    checksums baked into it, and refuses a changed one. The float16 graphics model is made on the computer from
+    the int8 file by a deterministic rewrite and checked against a baked-in checksum before use, so nothing is
+    downloaded and nothing unverified is loaded; the graphics processor is used only after its test said so, and a
+    failure in the middle falls back to the processor. RapReaper starts only the copy the installer allowed: the
+    installer verifies VocalRemover\VocalRemover.exe (or VocalRemover on a Mac) and its runtime library against the
+    package manifest before recording path + SHA-256 in kit\state\settings.json; a file that changed is refused
+    by find_exe as before. The model pieces are joined only when the whole file's checksum matches, by the installer
+    into VocalRemover\models (and, when it finds a complete set itself, by RapReaper into kit\models, under a
+    temporary name that takes the model's name only after the checksum matched). separate_song reads one audio file from references/imports/exports and writes two WAV files
+    into kit\imports; import_to_reaper goes through the helper's import_files, which accepts files only inside
+    kit\imports or kit\references. The update path keeps VocalRemover\models, Output and settings.json and replaces
+    the program. FLAC and Ogg decoding are pure Go libraries vendored with the source and covered by the manifest.
+    On a Mac the Vocal Remover's binary, library and .command are released from quarantine by the installer only
+    after their checksums matched the manifest.
+
+An independent audit, and what 1.4.1 changed (7 October 2026)
+-------------------------------------------------------------
+  Five reviewers who had not built RapReaper examined the two 1.4.0 packages (installer and packaging, privacy,
+  tool safety, the Vocal Remover and separation, the bridge and helper), testing every suspicion against the code.
+  What they found, and what was done:
+  - ONNX Runtime on the Mac (and Linux) contains Microsoft's usage reporting, which sent data over the internet and
+    wrote a device id under ~/.cache even though the program had switched reporting off through the library's own
+    call. The Windows libraries do not contain it. Fixed: ORT_DISABLE_TELEMETRY=1 is set before the library loads, in
+    the Vocal Remover, its .command file and RapReaper's own separation; checked with a system-call trace: no
+    connection at all, no device id. (Vocal Remover 2.0.1.)
+  - Update: it took the newest file named rapreaper*.zip and installed it without asking, and a crafted zip could
+    write outside the folder or seed the person's own settings (the program allow-list). Fixed as described above.
+    A failed replacement no longer leaves a half-updated folder.
+  - Privacy: folder paths outside the user folder (other drives, network and cloud drives, /Volumes) went out with
+    their folder names; the mix log kept the project's full path; e-mail addresses in cloud-drive folder names; the
+    account or computer name inside a project or song name; track names in sentences at the maximum level. Fixed: a
+    general rule now takes every folder below the standard ones out of any path (D:\Music\...\vocal.wav), e-mail
+    addresses become <email>, the account and computer names become <you> / <this PC> also inside names, the mix
+    log keeps the project's name only, and at maximum a track name is replaced wherever it stands (unless it is an
+    ordinary word). The mix log, the activity log and the label lookup are now readable only by this account (Mac).
+  - A chat could lower the privacy level, switch the record of what was sent off and delete it. Now only raising is
+    possible from a chat; lowering is the person's own step (rapreaper_install.py --privacy / --activity-log).
+  - separate_song could overwrite or take over another song's (Vocals)/(Instrumental) files and call an older or
+    another song's pair "finished". Now each job works in its own private folder, results never replace a file,
+    and a pair counts as done only for the exact source it was made from.
+  - A cancelled call could still run later in REAPER (the command stayed queued). Helper commands now expire, a cancel
+    withdraws any command REAPER has not taken yet, the helper claims each command once (it ran one ten times when it could not delete the file)
+    and never runs an id twice; leftover commands in the bridge's queue are removed after ten minutes.
+  - The helper's replies could be lost (a refused rename, a broken UTF-8 character) while the change had been made,
+    inviting a second try; fixed. It also checks numbers for infinity, validates every edit before applying any,
+    checks a restore's project, and identifies stock plug-ins by their file, not their shown name.
+  - open_project accepted any .rpp in the user folder (Downloads too); now only recent projects. save_project,
+    tidy_clips, restore_clips and remaster are now flagged to the Claude app as changes. tidy_clips removes clips
+    only up to 250 ms (it could remove whole short clips). restore_clips no longer uses another project's restore
+    point because a track has the same name. A raw settings-block write may change only the known settings bytes.
+  - The Vocal Remover: no more DLLs taken from its own folder for Windows system libraries (they are loaded from
+    System32 first, and an unexpected DLL in the folder stops it); header-claimed sizes in FLAC/Ogg files no
+    longer reserve gigabytes; the command line refuses files over 1 GB; a damaged optional model no longer stops it;
+    Windows device names inside file names are made harmless; the write test no longer follows a link.
+  - Separation jobs are never stopped by a process number that now belongs to another program, and the time limit
+    grows with the song (slow laptops); the model is checked every time and loaded from the checked bytes.
+  - The packages contained a real person's name in test data; replaced with invented names.
+  A second reviewer then tried to break those fixes and found more, now also fixed and pinned by tests (scenario
+  audit2): paths on network, cloud and oddly written drives (file://NAS, smb://, \\?\UNC, /Network, D:Music,
+  percent-encoded drives) and e-mail addresses in any alphabet are cleaned too, and an e-mail rule that could break the
+  JSON of a reply or run slowly was replaced; a track or song whose name contains the account name becomes a label (and
+  stays usable); a chat can no longer shorten the expiry (which would delete the activity log sooner) - that is
+  rapreaper_install.py --expire-days, the person's step; a change cancelled while REAPER is busy is withdrawn before
+  REAPER takes it; a Vocal Remover that stops half-way leaves no "finished" result (only its success lines and complete
+  files count); a learned plug-in layout cannot name most of the block (a way around the known-bytes rule); the
+  installer's ONNX Runtime check no longer creates a device id; Update keeps kit\imports and takes a placeholder file
+  only at the top of one of the person's folders; version numbers are plain digits only.
+
+  A third reviewer found more, also fixed and tested (scenario audit2): a song file, track or argument named like a
+  word of a reply ("result", "content", "true") could break every reply at the strict and maximum levels (labels are now
+  given only to real names, never written over a reply's own words, and a reply is never re-read as text); a track really
+  called "track 2" no longer takes over another track's label; open_project no longer opens a project file merely
+  lying in the imports folder (only recent projects); Make Full Packages never writes through a link planted in
+  Downloads and checks the zip against a SHA256SUMS list next to it; model pieces must be plain files of the published
+  size (a link to an endless device was read); a change left in the bridge's queue by a server that stopped is withdrawn
+  when the next one starts; a flood of text in an argument can no longer push older entries out of the activity log
+  (arguments are cut, four older copies kept); a settings.json that cannot be read (a byte-order mark from Notepad is
+  read correctly now) counts as the most private choices and is never written over.
+
+  A fourth reviewer found that some of those fixes had side effects, now fixed and tested (scenario audit2): a name is
+  always looked up as the real name first, so a track really called "Track 1" is never confused with a label,
+  and a label never means the master bus; a song, track or project name that holds the account name or an e-mail
+  address is given as a label, which every tool takes back (instead of "<you> adlibs", which no tool could find); the
+  account name is replaced only inside names and paths, so an account called "kit" or "max" cannot garble RapReaper's own
+  words; answers are cleaned value by value and only then written as JSON, so no name or path can break a reply; error
+  texts are cut at 4,000 characters; a helper command left by a stopped server is removed at the next start; "false"
+  given to bypass's on/enabled means no; a zip that would unpack to gigabytes is refused before it is read; settings
+  written by Notepad (with a byte-order mark) are read by the installer too.
+
+  A fifth reviewer showed that labels written like "track 3" could be the real name of a track (REAPER calls every
+  unnamed track "Track 3"), so a label could reach the wrong track. Labels are now written "track #3", "file #2.wav",
+  "project #1" (labels saved by 1.4.0 are converted); RapReaper refuses to make a track whose name looks like one; a name
+  of digits only is never searched for in text. A name that holds the account name or an e-mail address (a track, the
+  project, a song, a song setup) becomes a label as soon as RapReaper sees it in REAPER's answer, at every level, and is
+  replaced by that label wherever it stands (undo texts, progress messages); a plug-in whose name holds it is shown with
+  "<you>" instead. The computer name, like the account name, is replaced inside names and paths only (a computer called
+  "Recording" no longer changes RapReaper's own words). A full label list lets its oldest labels go instead of calling
+  every new track "a track". Unknown tool and method names are no longer echoed back whole.
+
+  A sixth reviewer showed that names were still being guessed in free text. Now: only fields that are names are
+  labelled (a mix-log value such as "off" never becomes a track); a label is always looked up first and means exactly one
+  thing, because any real name that looks like a label, and a track called "Master", gets a label of its own; RapReaper's
+  own calls find tracks by their REAPER id, so the master bus and a track called "Master" are never confused; names that
+  hold the account name are matched with their own capitals ("May" the track, not "may" the word), in any Unicode
+  spelling, from two letters on; a chain is never named after a track by itself; the label list is never written over
+  when it cannot be read, keeps its numbers (none is given out twice) and never lets go of a name that holds the account
+  name; a reply's id and progress token are never touched.
+
+  A seventh reviewer found the last places where a name could still slip or confuse: setting a plug-in and applying
+  song effects now pass the track's REAPER id between RapReaper's own tools; a name is replaced by its label inside
+  undo texts, measuring notes and progress lines as a whole name (not letter by letter); names are compared in one
+  Unicode form and in every capital spelling seen; the remaster's new session, file and track names pass the same
+  cleaning; a song setup with two tracks of one name is refused instead of guessing; a folder named like the account
+  is hidden only when it is not a standard or RapReaper folder; status lists any track names that should be changed
+  (names that look like labels, or a track called "Master"), so Claude can suggest renaming them.
+
+  An eighth reviewer found that the seventh round's care with one-word names had left sentences RapReaper builds itself
+  (a send, an undo text, a list of problems, the mix log) carrying them at the maximum level; these are now replaced as
+  whole names in every capital spelling seen, never inside a song file's name ("Kofi Vocal.wav" stays) and never where a
+  quoted word is one of RapReaper's own option values ('tone', 'reverb'). A real track called "MASTER" now gets a label
+  like one called "Master" (the bus alone is "MASTER"); a real track called "Vocals" or "All" is that track, not every
+  vocal; a name REAPER stores in decomposed Unicode is found by its composed spelling and by its label; a project row is
+  never given a track's label; the home folder with a space in its name is hidden whole even when another path follows.
+
+  A ninth reviewer found four more: the master bus could be shown as a track's label in the mix log and in song setups
+  (the log now marks the bus, and both answer "MASTER"); a track name inside a song file's name ("Lead Vox Comp.wav")
+  is left whole wherever the file name stands; a folder beside the home folder with several words in its name is hidden
+  whole; and RapReaper's own texts (undo history entries, notes, sends, error texts) write a real track called "track #2"
+  or "MASTER" as its own label, so such a text can only mean one track. Where Claude sees labels only, the word "vocals"
+  keeps its meaning (every vocal) even when a track is called "Vocals".
+
+  A tenth reviewer found the remaining places that still wrote a track's name as REAPER gave it: the soloed and muted
+  lists (status, the whole-mix checks), split_to_track's destination, remove_effect_track's list of feeding tracks,
+  the plug-in and fader entries RapReaper writes into REAPER's undo history, and the mix log's balance, send, fit and
+  song-setup entries. Every one now goes through the same rules, the mix log writes the master bus as "<master bus>"
+  (so a real track called "MASTER" is never read back as the bus), and level_match finds its rows by REAPER's id.
+
+  An eleventh reviewer found ten more, now fixed: a recalled song setup is logged with real names (the bus as the bus);
+  the mix log's effect-track and not-found names are labelled like other track names; song_tempo_and_key and
+  fit_instrumental take the track they picked themselves by its REAPER id (a track called "MASTER" could otherwise
+  stand in for the bus); add_send_effect and a one-file remaster take the label Claude was given for an existing track;
+  a restore point's reason no longer names another track, and points made in the same second keep their order; status
+  names the self-test's track as the level allows; chain notes no longer name the track they were built on (and older
+  notes have that name left out); measuring progress names an odd-named track by its label.
+
+  A twelfth reviewer found that the eleventh round's ordering of restore points made restore_clips pick a later point
+  when asked for an earlier one made in the same second (an exact id is now always taken first, and a start of an id
+  that fits several is refused); that capture files were named after the track (a name an error text could quote: they
+  are now named by a fingerprint); that an error text could still carry a one-word track name (every error text now
+  passes the same sentence rule); and that an older chain note with an apostrophe in the track name kept part of it.
+
+  A thirteenth reviewer found no regression and two small things, now fixed: a track RapReaper makes from another one
+  (split_to_track's new track, an effect track) no longer carries along a name that holds the account name (it is
+  called "Vocal split", "Vocal Reverb" instead), and such names are kept within REAPER's 60 characters, so the doubler,
+  reverb and delay work on tracks with long names too.
+
+  The fixes of rounds 7 to 13 ship in 1.4.2 (8 October 2026), which also adds the phone_fixes tool; that tool changes
+  only RapReaper's own plug-ins, faders and pans, each as one undo entry, after a plan the person has seen.
+
+  Still true after the audit (accepted, with the reason):
+  - Update runs the new version's own installer, so a zip made by someone else is code that runs as you; the checks
+    above make a damaged or odd zip fail, but only its source makes it trustworthy.
+  - There is no signature on the zips: a key would have to be kept safe for every future build. The person checks
+    a download against SHA256SUMS.txt from the same delivery; the updater does it when that file is next to the zip.
+  - Dropping unsaved changes (discard_changes) and saving (save_project) still rest on the person's yes in the chat
+    and on the Claude app asking before each use of a tool flagged as a change; leave those tools on "ask" if you
+    want a second confirmation. If REAPER's own "prompt to save" preference is off, REAPER reports no unsaved
+    changes, so RapReaper cannot warn.
+  - ffmpeg and whisper.cpp are fetched from their projects' current releases without a fixed checksum (their
+    builds change); the downloads are now written under a temporary name and moved into place only when complete,
+    and RapReaper starts them only after the person allowed that exact file.
+  - The Windows- and Mac-only parts (DLL loading, the .command files, CoreML/DirectML) were compiled and read, not
+    run; the graphics-processor test answers on the person's own computer.
+
+What 1.4.6 changed (9 November 2026)
+------------------------------------
+  - New downloads, both started only by the person (the "Get Vocal Remover Model" files, like "Get ffmpeg and
+    Transcriber"): the model's two source files from huggingface.co. Each is written under a temporary name, checked
+    against its published SHA-256 and only then put in place; a file that does not match is deleted. RapReaper's
+    Python and Lua still contain no network code.
+  - The installer reads the downloaded checkpoint only after its size and checksum matched, and through the converter's
+    own reader, which accepts nothing but tensors (no code in a checkpoint can run). The built model must have the
+    model's published checksum, or it is deleted.
+  - The Intel Mac package's ONNX Runtime 1.23.2 is Microsoft's unchanged file from the onnxruntime releases; the
+    program checks it by its SHA-256 before loading it, like every other library.
+
+What 1.4.5 changed (9 November 2026)
+------------------------------------
+  - A review before the public release rebuilt both Vocal Remover programs from VocalRemover/source and got the
+    shipped files byte for byte; checked the vendored Go modules against the official module copies (go.sum and the
+    Go checksum database); compared ONNX Runtime, DirectML and the Visual C++ runtime files with Microsoft's
+    published packages (identical); scanned every file of both zips, programs and PDFs included, for names, e-mail
+    addresses, folder paths, account and computer names, keys and passwords (none of anyone's); and ran bandit over
+    the Python code (no high-severity finding; the medium ones are the documented chmod 755 of shipped .command
+    files after their checksum matched, and a check that the folder is not in /tmp).
+  - Go's vulnerability checker found that the Vocal Remover, built with Go 1.24.7, reached 31 known issues of Go's
+    standard library. None was reachable from another computer (the window server listens on 127.0.0.1 behind a
+    one-time key with host and origin checks, and the program makes no TLS connection), but Go 1.24 gets no more
+    fixes, so 2.0.2 is the same code built with Go 1.27.3, with go.mod at go 1.27 so that Go's current default settings
+    apply (a limit on HTTP Range headers, stricter URL parsing); the checker finds none of the 31.
+
+What is still true, on purpose
+------------------------------
+  - Once you have said yes, a cut or mute does happen. It is one named step in REAPER's undo
+    history (and, since 1.3.0, has a restore point); the recording files are never changed, and
+    the project is saved only by save_project, after you asked, to its own file.
+  - Track names go to Claude at the standard and strict levels: it needs them to work. Name
+    them plainly, or use the maximum level. What you type in the chat goes to Anthropic at
+    every level; RapReaper can only keep its own answers lean.
+  - The bridge's command files inside this folder can be written by any program running
+    under your account (out of scope, see above). Keep the folder in your own user folder.
+  - Programs RapReaper starts (its separation worker, the allowed Vocal Remover, ffmpeg, whisper.cpp)
+    write their own logs next to their output, unfiltered; those stay on this computer.
+  - Whether a graphics processor runs the network correctly can only be found out on the computer itself; the
+    Vocal Remover's test compares the graphics result with the processor's before trusting it.
+  - On a Mac, ReaPack and the SWS extension are downloaded programs that REAPER loads; macOS may ask once
+    to allow them (ReaPack's own documented step). That is between the person, Apple and REAPER; RapReaper
+    only checks that SWS is there.

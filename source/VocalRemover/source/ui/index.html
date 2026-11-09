@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vocal Remover</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <h1>Vocal Remover</h1>
+    <p class="offline" id="offline"><span class="lamp" aria-hidden="true"></span>Running on this computer only, no internet used</p>
+  </header>
+
+  <div id="alert" class="alert" role="alert" hidden></div>
+
+  <main>
+    <section class="deck" aria-labelledby="song-heading">
+      <h2 id="song-heading" class="visually-hidden">Song</h2>
+
+      <div id="drop" class="drop">
+        <p class="drop-lead">Drop a song here</p>
+        <p class="drop-sub">MP3, WAV, FLAC or Ogg Vorbis. It is opened from your disk and never leaves this computer.</p>
+        <button type="button" id="choose" class="btn">Choose a song</button>
+        <input type="file" id="file" accept=".mp3,.wav,.flac,.ogg,.oga,audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/ogg" hidden>
+        <div id="loading" class="loading" hidden>
+          <div class="bar"><div class="bar-fill" id="load-fill"></div></div>
+          <p id="load-text" aria-live="polite">Opening song</p>
+        </div>
+      </div>
+
+      <div id="editor" hidden>
+        <div class="song-line">
+          <p class="song-name" id="song-name"></p>
+          <p class="song-meta" id="song-meta"></p>
+          <button type="button" id="change" class="btn btn-quiet">Choose another song</button>
+        </div>
+
+        <div class="wave-wrap" id="wave-wrap">
+          <canvas id="wave" aria-hidden="true"></canvas>
+          <div class="shade" id="shade-left" aria-hidden="true"></div>
+          <div class="shade" id="shade-right" aria-hidden="true"></div>
+          <div class="playhead" id="playhead" aria-hidden="true" hidden></div>
+          <div class="handle" id="handle-start" role="slider" tabindex="0" aria-label="Start of the part to process"></div>
+          <div class="handle" id="handle-end" role="slider" tabindex="0" aria-label="End of the part to process"></div>
+        </div>
+        <p class="wave-help">Drag across the waveform, or drag the two markers, to pick the part you want. Arrow keys move a selected marker by one second.</p>
+
+        <div class="span-row">
+          <button type="button" id="play" class="btn btn-quiet" aria-pressed="false">Play selection</button>
+          <label class="field">
+            <span>From</span>
+            <input type="text" id="from" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="time-help">
+          </label>
+          <label class="field">
+            <span>To</span>
+            <input type="text" id="to" inputmode="decimal" autocomplete="off" spellcheck="false" aria-describedby="time-help">
+          </label>
+          <button type="button" id="whole" class="btn btn-quiet">Whole song</button>
+          <p class="span-length" id="span-length" aria-live="polite"></p>
+        </div>
+        <p class="hint" id="time-help">Times are minutes:seconds, for example 1:07.5</p>
+
+        <div class="options">
+          <fieldset class="opt" id="modes">
+            <legend>Mode</legend>
+            <!-- filled in by app.js from the program's list of modes -->
+          </fieldset>
+
+          <div class="opt">
+            <label for="format">File type</label>
+            <select id="format">
+              <option value="24" selected>WAV, 24-bit (recommended)</option>
+              <option value="16">WAV, 16-bit (smaller, CD quality)</option>
+              <option value="32f">WAV, 32-bit float (for further mixing)</option>
+            </select>
+          </div>
+
+          <div class="opt opt-wide">
+            <label for="folder">Save into</label>
+            <div class="folder-row">
+              <input type="text" id="folder" autocomplete="off" spellcheck="false">
+              <button type="button" id="browse" class="btn btn-quiet" hidden>Browse</button>
+            </div>
+          </div>
+
+          <div class="opt opt-wide gpu" id="gpu-box">
+            <label class="choice gpu-choice"><input type="checkbox" id="gpu-on">
+              <span><strong>Use the graphics processor</strong> <span id="gpu-name"></span></span></label>
+            <p class="hint" id="gpu-status"></p>
+            <div class="gpu-row">
+              <button type="button" id="gpu-test" class="btn btn-quiet">Test the graphics processor</button>
+              <p class="hint" id="gpu-test-text" aria-live="polite"></p>
+            </div>
+            <pre class="gpu-report" id="gpu-report" hidden></pre>
+          </div>
+        </div>
+
+        <div class="go-row">
+          <button type="button" id="go" class="btn btn-go">Remove vocals</button>
+          <p class="hint" id="go-hint">Makes two files: the instrumental and the vocals.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="progress" class="panel" aria-labelledby="progress-heading" hidden>
+      <h2 id="progress-heading">Working</h2>
+      <div class="bar bar-big" id="job-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="progress-heading">
+        <div class="bar-fill" id="job-fill"></div>
+      </div>
+      <div class="progress-line">
+        <p id="job-text" aria-live="polite"></p>
+        <button type="button" id="cancel" class="btn btn-quiet">Cancel</button>
+      </div>
+    </section>
+
+    <section id="results" class="panel" aria-labelledby="results-heading" hidden>
+      <h2 id="results-heading">Saved</h2>
+      <p class="hint" id="results-summary"></p>
+      <div class="stem stem-inst">
+        <div class="stem-head"><h3>Instrumental</h3><p class="path" id="inst-path"></p></div>
+        <audio id="inst-audio" controls preload="metadata"></audio>
+      </div>
+      <div class="stem stem-voc">
+        <div class="stem-head"><h3>Vocals</h3><p class="path" id="voc-path"></p></div>
+        <audio id="voc-audio" controls preload="metadata"></audio>
+      </div>
+      <p class="note" id="results-note" hidden></p>
+      <button type="button" id="open-folder" class="btn">Open the folder</button>
+    </section>
+  </main>
+
+  <footer>
+    <p id="about"></p>
+  </footer>
+</div>
+<audio id="orig-audio" preload="none"></audio>
+<script src="app.js"></script>
+</body>
+</html>

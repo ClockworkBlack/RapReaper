@@ -1,0 +1,137 @@
+{
+ "name": "rap-lead-starter",
+ "version": 1,
+ "role": "vocal",
+ "notes": "A sensible starting chain for a lead rap vocal recorded at a healthy level (loud lines peaking around -12 to -6 dBFS). It is NOT fitted to your recording: thresholds depend on how loud the recording is. For a fitted chain use vocal_chain (plan, cleanup, compress, tone, deess, finish) instead, or adjust Thresh on comp1/comp2 after applying.",
+ "slots": [
+  {
+   "slot": "hpf",
+   "add": [
+    "JS:sstillwell/hpflpf",
+    "JS: RBJ Highpass/Lowpass Filters"
+   ],
+   "bypassed": false,
+   "params": {
+    "HPF": "90 Hz",
+    "LPF": "22000 Hz",
+    "Gain": "0 dB"
+   }
+  },
+  {
+   "slot": "eq_clean",
+   "add": [
+    "ReaEQ (Cockos)",
+    "ReaEQ"
+   ],
+   "bypassed": false,
+   "eq_moves": [
+    {
+     "kind": "bell",
+     "hz": 300,
+     "db": -2.5,
+     "bw": 1.2
+    }
+   ]
+  },
+  {
+   "slot": "comp1",
+   "add": [
+    "ReaComp (Cockos)",
+    "ReaComp"
+   ],
+   "bypassed": false,
+   "params": {
+    "Ratio": "4",
+    "Attack": "3 ms",
+    "Release": "60 ms",
+    "Knee": "3 dB",
+    "RMS size|RMS": "5 ms",
+    "Thresh|Threshold": "-22 dB",
+    "Wet": "3 dB",
+    "Pre-comp|Precomp": "0 ms",
+    "AutoMkUp|Auto make-up|Auto makeup|Auto Make Up Gain|Auto make up gain": "off"
+   }
+  },
+  {
+   "slot": "comp2",
+   "add": [
+    "ReaComp (Cockos)",
+    "ReaComp"
+   ],
+   "bypassed": false,
+   "params": {
+    "Ratio": "2.5",
+    "Attack": "20 ms",
+    "Release": "200 ms",
+    "Knee": "6 dB",
+    "RMS size|RMS": "20 ms",
+    "Thresh|Threshold": "-24 dB",
+    "Wet": "2 dB",
+    "Pre-comp|Precomp": "0 ms",
+    "AutoMkUp|Auto make-up|Auto makeup|Auto Make Up Gain|Auto make up gain": "off"
+   }
+  },
+  {
+   "slot": "eq_tone",
+   "add": [
+    "ReaEQ (Cockos)",
+    "ReaEQ"
+   ],
+   "bypassed": false,
+   "eq_moves": [
+    {
+     "kind": "bell",
+     "hz": 3500,
+     "db": 2.5,
+     "bw": 1.6
+    },
+    {
+     "kind": "highshelf",
+     "hz": 9000,
+     "db": 3.0
+    }
+   ]
+  },
+  {
+   "slot": "deess",
+   "add": [
+    "JS:Liteon/deesser",
+    "JS: De-esser"
+   ],
+   "bypassed": false,
+   "params": {
+    "Processing": {
+     "norm": 0.0,
+     "shows": "Stereo"
+    },
+    "Target Type": {
+     "norm": 1.0,
+     "shows": "Hipass"
+    },
+    "Monitor": {
+     "norm": 0.0,
+     "shows": "Off"
+    },
+    "Time Constants": {
+     "norm": 0.0
+    },
+    "Gain": "0 dB",
+    "Frequency": "4000 Hz",
+    "Ratio": "20",
+    "Threshold": "-40 dB"
+   }
+  },
+  {
+   "slot": "trim",
+   "add": [
+    "JS:utility/volume_pan",
+    "JS: Volume/Pan Smoother"
+   ],
+   "bypassed": false,
+   "params": {
+    "Volume": "0 dB",
+    "Pan": "0"
+   }
+  }
+ ]
+}

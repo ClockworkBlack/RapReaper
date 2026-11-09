@@ -1,0 +1,242 @@
+{
+ "Angels In Amplifiers - I'm Alright": {
+  "MelRoformer-KimFT2-int8.onnx": {
+   "instrumental_accuracy_db": 15.43,
+   "vocal_accuracy_db": 13.49,
+   "voice_left_db": -13.49,
+   "seconds_processed": 60.0,
+   "took_s": 85.4,
+   "excerpt": [
+    116.0,
+    176.0
+   ]
+  },
+  "BS-Roformer-1297-int8.onnx": {
+   "instrumental_accuracy_db": 15.79,
+   "vocal_accuracy_db": 13.85,
+   "voice_left_db": -13.85,
+   "seconds_processed": 60.0,
+   "took_s": 193.4,
+   "excerpt": [
+    116.0,
+    176.0
+   ]
+  },
+  "MelRoformer-KimFT3prev-int8.onnx": {
+   "instrumental_accuracy_db": 15.47,
+   "vocal_accuracy_db": 13.52,
+   "voice_left_db": -13.52,
+   "seconds_processed": 60.0,
+   "took_s": 129.0,
+   "excerpt": [
+    116.0,
+    176.0
+   ]
+  },
+  "MelRoformer-Becruily-int8.onnx": {
+   "instrumental_accuracy_db": 15.1,
+   "vocal_accuracy_db": 13.16,
+   "voice_left_db": -13.16,
+   "seconds_processed": 60.0,
+   "took_s": 91.7,
+   "excerpt": [
+    116.0,
+    176.0
+   ]
+  },
+  "MelRoformer-KimFT2bleedless-int8.onnx": {
+   "instrumental_accuracy_db": 15.34,
+   "vocal_accuracy_db": 13.4,
+   "voice_left_db": -13.4,
+   "seconds_processed": 60.0,
+   "took_s": 89.5,
+   "excerpt": [
+    116.0,
+    176.0
+   ]
+  },
+  "MelRoformer-KimOrig-int8.onnx": {
+   "instrumental_accuracy_db": 15.33,
+   "vocal_accuracy_db": 13.38,
+   "voice_left_db": -13.38,
+   "seconds_processed": 60.0,
+   "took_s": 86.8,
+   "excerpt": [
+    116.0,
+    176.0
+   ]
+  },
+  "ensemble(MelRoformer-KimFT2-int8.onnx+BS-Roformer-1297-int8.onnx)": {
+   "instrumental_accuracy_db": 15.94,
+   "vocal_accuracy_db": 14.0,
+   "voice_left_db": -14.0,
+   "seconds_processed": 60.0,
+   "took_s": 278.8,
+   "excerpt": [
+    116.0,
+    176.0
+   ],
+   "took_note": "the two networks run one after the other: their times added (the averaging takes no time to speak of)"
+  }
+ },
+ "BKS - Bulldozer": {
+  "MelRoformer-KimFT2-int8.onnx": {
+   "instrumental_accuracy_db": 18.36,
+   "vocal_accuracy_db": 12.75,
+   "voice_left_db": -12.75,
+   "seconds_processed": 60.0,
+   "took_s": 78.9,
+   "excerpt": [
+    29.0,
+    89.0
+   ]
+  },
+  "BS-Roformer-1297-int8.onnx": {
+   "instrumental_accuracy_db": 18.36,
+   "vocal_accuracy_db": 12.75,
+   "voice_left_db": -12.75,
+   "seconds_processed": 60.0,
+   "took_s": 173.0,
+   "excerpt": [
+    29.0,
+    89.0
+   ]
+  },
+  "MelRoformer-KimFT3prev-int8.onnx": {
+   "instrumental_accuracy_db": 18.39,
+   "vocal_accuracy_db": 12.78,
+   "voice_left_db": -12.78,
+   "seconds_processed": 60.0,
+   "took_s": 91.7,
+   "excerpt": [
+    29.0,
+    89.0
+   ]
+  },
+  "MelRoformer-Becruily-int8.onnx": {
+   "instrumental_accuracy_db": 18.04,
+   "vocal_accuracy_db": 12.43,
+   "voice_left_db": -12.43,
+   "seconds_processed": 60.0,
+   "took_s": 75.9,
+   "excerpt": [
+    29.0,
+    89.0
+   ]
+  },
+  "MelRoformer-KimFT2bleedless-int8.onnx": {
+   "instrumental_accuracy_db": 18.33,
+   "vocal_accuracy_db": 12.72,
+   "voice_left_db": -12.72,
+   "seconds_processed": 60.0,
+   "took_s": 76.8,
+   "excerpt": [
+    29.0,
+    89.0
+   ]
+  },
+  "MelRoformer-KimOrig-int8.onnx": {
+   "instrumental_accuracy_db": 18.56,
+   "vocal_accuracy_db": 12.96,
+   "voice_left_db": -12.96,
+   "seconds_processed": 60.0,
+   "took_s": 75.1,
+   "excerpt": [
+    29.0,
+    89.0
+   ]
+  },
+  "ensemble(MelRoformer-KimFT2-int8.onnx+BS-Roformer-1297-int8.onnx)": {
+   "instrumental_accuracy_db": 18.67,
+   "vocal_accuracy_db": 13.06,
+   "voice_left_db": -13.06,
+   "seconds_processed": 60.0,
+   "took_s": 251.9,
+   "excerpt": [
+    29.0,
+    89.0
+   ],
+   "took_note": "the two networks run one after the other: their times added (the averaging takes no time to speak of)"
+  }
+ },
+ "Little Chicago's Finest - My Own": {
+  "MelRoformer-KimFT2-int8.onnx": {
+   "instrumental_accuracy_db": 23.54,
+   "vocal_accuracy_db": 18.51,
+   "voice_left_db": -18.51,
+   "seconds_processed": 60.0,
+   "took_s": 78.0,
+   "excerpt": [
+    101.0,
+    161.0
+   ]
+  },
+  "BS-Roformer-1297-int8.onnx": {
+   "instrumental_accuracy_db": 23.83,
+   "vocal_accuracy_db": 18.8,
+   "voice_left_db": -18.8,
+   "seconds_processed": 60.0,
+   "took_s": 177.0,
+   "excerpt": [
+    101.0,
+    161.0
+   ]
+  },
+  "MelRoformer-KimFT3prev-int8.onnx": {
+   "instrumental_accuracy_db": 23.52,
+   "vocal_accuracy_db": 18.49,
+   "voice_left_db": -18.49,
+   "seconds_processed": 60.0,
+   "took_s": 75.4,
+   "excerpt": [
+    101.0,
+    161.0
+   ]
+  },
+  "MelRoformer-Becruily-int8.onnx": {
+   "instrumental_accuracy_db": 23.2,
+   "vocal_accuracy_db": 18.18,
+   "voice_left_db": -18.18,
+   "seconds_processed": 60.0,
+   "took_s": 75.4,
+   "excerpt": [
+    101.0,
+    161.0
+   ]
+  },
+  "MelRoformer-KimFT2bleedless-int8.onnx": {
+   "instrumental_accuracy_db": 23.51,
+   "vocal_accuracy_db": 18.49,
+   "voice_left_db": -18.49,
+   "seconds_processed": 60.0,
+   "took_s": 73.9,
+   "excerpt": [
+    101.0,
+    161.0
+   ]
+  },
+  "MelRoformer-KimOrig-int8.onnx": {
+   "instrumental_accuracy_db": 23.47,
+   "vocal_accuracy_db": 18.45,
+   "voice_left_db": -18.45,
+   "seconds_processed": 60.0,
+   "took_s": 77.2,
+   "excerpt": [
+    101.0,
+    161.0
+   ]
+  },
+  "ensemble(MelRoformer-KimFT2-int8.onnx+BS-Roformer-1297-int8.onnx)": {
+   "instrumental_accuracy_db": 24.29,
+   "vocal_accuracy_db": 19.26,
+   "voice_left_db": -19.26,
+   "seconds_processed": 60.0,
+   "took_s": 255.0,
+   "excerpt": [
+    101.0,
+    161.0
+   ],
+   "took_note": "the two networks run one after the other: their times added (the averaging takes no time to speak of)"
+  }
+ }
+}
