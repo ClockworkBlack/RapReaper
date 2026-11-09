@@ -1,0 +1,200 @@
+RapReaper 1.4.6
+============
+
+RapReaper's own files (rapreaper_install.py, kit/rapreaper_server.py, kit/rapreaper_audio.py, kit/rapreaper_music.py,
+kit/rapreaper_platform.py, kit/rapreaper_programs.py, kit/rapreaper_effects.py, kit/rapreaper_separate.py,
+kit/rapreaper_helper.lua, kit/PLAYBOOK.md, kit/chains/*.json, the .bat and .command files, the build/ scripts and
+the files under sim/ and tests/)
+were written for you by Claude (Anthropic) in October and November 2026. They are under the
+MIT licence: see LICENSE.txt (use, change and share them, also commercially, keeping the
+licence notice; no warranty). The same goes for the Vocal Remover's own source code in
+VocalRemover/source (not its vendor/ folder). Two things in sim/ and tests/ rest on other
+people's work and keep those people's terms; they are listed under "Test material" below.
+Every third-party part below keeps its own licence.
+
+Third-party component
+---------------------
+kit/reaper-daemon/ is an UNMODIFIED part of "Reaper Daemon" by David Russell:
+
+  Source    https://github.com/wretcher207/reaper-daemon
+  Version   v3.22.1  (git commit 98c8710fa34c160ee84a914eb84a604aa5778420)
+  Licence   MIT, Copyright (c) 2026 David Russell  (full text: kit/reaper-daemon/LICENSE)
+
+Only these files are included, byte for byte as published. SHA-256 checksums:
+
+  2f30318084e15096da6ecc462b1e5bd63fe91c9f143a1becdc803509c89ed731  bridge/reaper_agent_bridge.lua
+  b49b586232c17612565deeb1242a87c3befab897040cd2f9e3c02c6305aa2498  bridge/json.lua
+  258d9f42df2cc691ebcc96f121cbc6d86cedb316dcbb18535d90c166f1c4d76a  reaperd.py
+  2c7f08cc7dd1b90ddd590305d3344d83a897e76837253ed2879a03badce12f87  setup/install.py
+  ac4dc612db5f27431b20474aaa59143b5536d43a2cd3f51047423d5a7e5d0fcc  LICENSE
+
+To check them yourself, open PowerShell in kit\reaper-daemon and run, for example:
+  Get-FileHash bridge\reaper_agent_bridge.lua -Algorithm SHA256
+
+How RapReaper uses it
+------------------
+* bridge/reaper_agent_bridge.lua runs inside REAPER and carries out commands it finds as
+  small JSON files in kit/reaper-daemon/inbox. The bridge can do more than RapReaper lets
+  through (for example delete a track or save the project). RapReaper's server only ever
+  sends the commands on its own short allow-list (see READ_COMMANDS and WRITE_COMMANDS
+  near the top of kit/rapreaper_server.py), and the bridge's own switches for "save the
+  project" stay OFF in kit/reaper-daemon/bridge/bridge_config.json.
+* reaperd.py is imported for four functions only: send_command (write a command file),
+  _queue_file (where that command's reply file will appear; RapReaper reads the reply
+  itself), resolve_fx_name (look a plug-in name up in REAPER's plug-in list) and
+  find_resource_dir (where that list lives). The rest of that file belongs to features
+  RapReaper does not use.
+* setup/install.py supplies the text of the bridge's auto-start block (block_text) and the
+  helpers for the bridge's permission file (read_config, set_gates). rapreaper_install.py
+  writes that block into REAPER's Scripts/__startup.lua itself, so that a startup script
+  with unusual encoding keeps every byte of your own lines. Above it, it writes a second
+  short block of RapReaper's own: at every start of REAPER it notes the time in
+  kit/state/reaper_started.txt (that is how RapReaper tells a REAPER that crashed in the
+  middle of a measurement, and was started again, from one that is merely busy) and then
+  starts kit/rapreaper_helper.lua, RapReaper's own helper. The bridge cannot split a clip or
+  read a plug-in's settings block; the helper does only that (see the notes at its top),
+  through its own small JSON files in kit/state/helper, and is RapReaper's own code.
+
+Before shipping, the upstream project's own tests were run on these exact files
+(bridge/test_bridge.lua: 624 checks passed; bridge/test_json.lua: 40 passed), and both
+this component and RapReaper were read for network access and hidden behaviour: none found.
+
+Plug-ins RapReaper adds in REAPER
+------------------------------
+All of them ship with REAPER itself: ReaEQ, ReaComp, ReaLimit, ReaVerbate, ReaDelay
+(Cockos) and the JS effects "RBJ Highpass/Lowpass Filters" and "Downward Expander"
+(Stillwell), "De-esser" (Liteon), "Volume/Pan Smoother" and "Tone Generator" (Cockos),
+"Master Limiter" (Loser). Nothing extra is downloaded.
+
+Python packages
+---------------
+NumPy and SciPy (BSD licences), installed by pip from https://pypi.org .
+Optional, installed by pip when they can be fetched: lameenc (the LAME MP3 encoder, LGPL licence,
+https://github.com/chrisstaite/lameenc), used only to write MP3 copies of exports; onnxruntime
+(MIT licence), see "Separating a song's vocal" below.
+
+Programs RapReaper can start, if the person allows them (none is bundled, none is downloaded)
+--------------------------------------------------------------------------------------------
+ffmpeg (https://ffmpeg.org, LGPL/GPL) for MP3 and M4A copies of exports; whisper.cpp
+(https://github.com/ggerganov/whisper.cpp, MIT licence) with an OpenAI Whisper model file
+converted to ggml (MIT licence) to write down the words of a vocal on this PC. Each is used
+only after the person records its path and checksum with the matching "Allow ... .bat".
+
+Test material (sim/ and tests/; RapReaper itself does not use any of it)
+---------------------------------------------------------------------
+* tests/data/real_speech.wav is half a minute of read speech: three clips (LJ001-0001,
+  LJ001-0003, LJ001-0005) from the LJ Speech Dataset by Keith Ito and Linda Johnson
+  (https://keithito.com/LJ-Speech-Dataset/), which is in the public domain.
+
+* sim/sim_render.py is the "sound" of the simulated REAPER. Four of its functions are
+  Python re-writes, made for testing only, of the processing in JS effects that ship with
+  REAPER, written from those effects' published source code. They stay under their
+  authors' terms; if you pass the sim folder on, pass this notice on with it:
+
+    fx_expander       "Downward Expander"   Copyright 2007, Thomas Scott Stillwell
+                      (BSD-style licence, reproduced below)
+    fx_deesser        "De-esser"            (C) 2009, Lubomir I. Ivanov (Liteon); released
+                      under the GPL (http://www.gnu.org/licenses/); its filters after
+                      T. Lossius (ttblue project)
+    fx_masterlimiter  "Master Limiter"      (C) 2006, Michael Gruhn (LOSER); use of the
+                      source granted with acknowledgement of the author
+    fx_tonegen        "Tone Generator"      Copyright (C) 2004 and later Cockos
+                      Incorporated; LGPL (http://www.gnu.org/licenses/lgpl.html)
+
+  The other plug-in models in that file (ReaEQ, ReaComp, ReaLimit, the high-pass filter,
+  the trim) are textbook formulas, not translations of anyone's code.
+
+  Licence of the Downward Expander source:
+
+    Copyright 2007, Thomas Scott Stillwell
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without modification, are
+    permitted provided that the following conditions are met:
+
+    Redistributions of source code must retain the above copyright notice, this list of
+    conditions and the following disclaimer.
+
+    Redistributions in binary form must reproduce the above copyright notice, this list of
+    conditions and the following disclaimer in the documentation and/or other materials
+    provided with the distribution.
+
+    The name of Thomas Scott Stillwell may not be used to endorse or promote products
+    derived from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+    MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+    THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+    OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Reference data
+--------------
+The "natural speech" tone yardstick in kit/rapreaper_audio.py is derived from Table II of
+Byrne et al., "An international comparison of long-term average speech spectra",
+J. Acoust. Soc. Am. 96(4), 2108-2120 (1994). Loudness is measured as defined in
+ITU-R BS.1770 and EBU R 128 / Tech 3341 / Tech 3342.
+
+Vocal separation (separate_song, learn_song_effects) and the Vocal Remover 2.0
+----------------------------------------------------------------------------
+kit/rapreaper_separate.py takes the voice out of a song with the Vocal Remover's networks: either by
+starting the Vocal Remover program shipped in VocalRemover/ (allowed by the installer by path and
+SHA-256; its own source is in VocalRemover/source and its own notices in VocalRemover/licenses), or
+by running the same model file through Microsoft's ONNX Runtime (MIT licence), installed as the Python
+package "onnxruntime" by the installer. The models, from the Ultimate Vocal Remover community
+(Anjok07 and aufr33, MIT licence; https://github.com/Anjok07/ultimatevocalremovergui), are NOT in the
+zip or the GitHub repository: they are large, and their authors published no licence that lets anyone
+else pass the files on (Kimberley Jensen's base model is MIT; unwa's fine-tune, viperx's BS-Roformer and
+the MDX files state none). So each person gets them from the authors: "Get Vocal Remover Model" downloads
+unwa's two public files (checked) and the installer builds MelRoformer-KimFT2-int8.onnx from them; or
+pieces delivered with RapReaper are joined. The installer checks every model file:
+    f81d9265cf57b66808db38d72ae136f3d74f3888f642e085478288f774b5a0d4   MelRoformer-KimFT2-int8.onnx
+        "Kim Mel-Band Roformer FT2": Kimberley Jensen's Mel-Band Roformer vocal model (MIT,
+        https://huggingface.co/KimberleyJSN/melbandroformer), fine-tuned by unwa
+        (https://huggingface.co/pcunwa/Kim-Mel-Band-Roformer-FT, kimmel_unwa_ft2.ckpt); the ONNX
+        file is built from the public checkpoint by VocalRemover/source/tools/build_roformer_onnx.py
+        (int8 weights, 801-frame windows); the program makes a float16 copy of it for the graphics
+        processor whose SHA-256 is 8c5aa71978d478d5a20b657ec9ae1b411b74c548d2fd81b2239cbf2a829bcc91
+    a31b1fed94ed5fcf3c8ef41f9cf55a31ba6da2f1028d91d296907ced99b23cdf   BS-Roformer-1297-int8.onnx
+        "BS-Roformer-Viperx-1297" by viperx (checkpoint model_bs_roformer_ep_317_sdr_12.9755), built
+        the same way
+    ce74ef3b6a6024ce44211a07be9cf8bc6d87728cc852a68ab34eb8e58cde9c8b   Kim_Vocal_2.onnx
+        "Kim Vocal 2" by KimberleyJSN (MDX-Net), used when nothing newer is present
+    3c4b5b9b05090fdf238f38ba5046813982d50e2a652e9cb3324ea79720c3c9c8   UVR-MDX-NET-Inst_HQ_4.onnx
+        by the UVR team, for the Vocal Remover's quick modes
+The Band-Split and Mel-Band RoPE Transformer architectures are by Lu, Wang et al. (ByteDance, 2023;
+arXiv 2309.02612 and 2310.01809); the open implementations by Phil Wang (lucidrains/BS-RoFormer, MIT)
+and Roman Solovyev (ZFTurbo/Music-Source-Separation-Training, MIT). The processing around the MDX
+network (FFT size 7680, hop 1024, 3072 bins, 256 frames, gain correction 1.009) comes from the UVR
+model database (https://github.com/TRvlvr/application_data); the Roformer windows (8 s, hop 441,
+one-second crossfades) follow the reference inference. The UVR project asks programs that use its
+models to credit UVR and its developers; RapReaper does so gladly. Quality was measured on test songs
+of MUSDB18-HQ (Rafii et al., 2019) against their true stems; the numbers are in the guides.
+
+The Vocal Remover itself (Go, no cgo) ships with: ONNX Runtime 1.30.0 for Windows x64 and for macOS
+arm64, and 1.23.2 for macOS x86_64 in the Intel Mac package (SHA-256 of libonnxruntime.1.23.2.dylib:
+8c9c78de65ea3786f987c0d980e9c1b13a3a5fbc6b3e2965ba05b450e6e4c054) (MIT; unchanged official files from
+github.com/microsoft/onnxruntime/releases), ONNX Runtime
+1.24.4 built with DirectML and DirectML 1.15.4 (Microsoft; NuGet packages Microsoft.ML.OnnxRuntime
+.DirectML and Microsoft.AI.DirectML, unchanged, Windows only, used only when the graphics processor is
+on), the Microsoft Visual C++ runtime 14.40 (Windows), purego (Apache 2.0), go-mp3 (Apache 2.0,
+modified: see VocalRemover/source/internal/mp3/MODIFICATIONS.md), mewkiz/flac (public domain) with
+icza/bitio (Apache 2.0), and jfreymuth/oggvorbis and vorbis (MIT). Every checksum is in
+MANIFEST.sha256; the program checks the libraries and models against checksums baked into it.
+
+The key detector in kit/rapreaper_effects.py uses the key profiles of Krumhansl & Kessler (1982),
+Psychological Review 89(4), 334-368.
+
+Tempo, key and alignment (kit/rapreaper_music.py, 1.4.0)
+---------------------------------------------------------
+The tempo finder follows the usual onset-strength autocorrelation of Ellis, "Beat tracking by dynamic
+programming", J. New Music Research 36(1), 51-60 (2007), with a mild preference for the tempos drum
+machines are set to; the key finder of a beat uses the same Krumhansl & Kessler (1982) profiles as the
+one for a sung line; lining two recordings up is plain normalized cross-correlation of their attack
+curves and then of their waveforms. The reference cards' loudness figures are those published by the
+streaming services (Spotify's loudness-normalization page and the others' published figures, October
+2026); everything else in the cards is common mixing practice written down, not taken from any one source.

@@ -1,0 +1,2039 @@
+#!/usr/bin/env python3
+"""reaperd — cross-platform CLI for the Reaper Daemon REAPER agent bridge.
+
+A single entry point that replaces the old per-task shell helpers. Works on
+macOS, Linux, and Windows (run with `python3` on macOS/Linux, `python` on
+Windows). The bridge itself is agent- and OS-agnostic; this CLI just reads and
+writes JSON files in inbox/outbox and talks to REAPER's on-disk plugin cache.
+
+Subcommands:
+  send       send a command JSON file (optionally wait for the reply)
+  cmd        send by <type> + <payload-json> (auto-resolves add_fx names,
+             repairs set_fx_param field aliases)
+  status     liveness check via the bridge heartbeat
+  measure    capture one track once and print measured audio metrics
+  verify     measure -> mutate -> measure: run a command with measured proof
+  fxload     resolve an installed plugin name and add it to a track
+  setparam   set any plugin parameter to a display value, with verify
+  eq         set one EQ band (freq/gain/Q) and confirm it took
+  groove     render a DSL drum beat and insert it onto a track
+  jam        render a DSL beat from stdin onto the selected track
+  list-maps  print the available drum-kit maps
+  discover-map  probe a drum track's MIDI note names and propose a kit map
+  add-map    save a drum-kit map to the user overlay (JSON or inline roles)
+  remove-map remove a user-overlay drum-kit map
+
+Run `python3 reaperd.py <subcommand> -h` for per-subcommand options.
+"""
+
+import argparse
+import datetime
+import glob
+import json
+import os
+import platform
+import re
+import secrets
+import subprocess
+import sys
+import tempfile
+import time
+
+# expanduser+abspath: a literal "~" in REAPER_DAEMON_ROOT (or --bridge-root)
+# used to silently mkdir "./~/.../inbox" in the CWD and queue commands nowhere.
+BRIDGE_ROOT = os.path.abspath(os.path.expanduser(
+    os.environ.get("REAPER_DAEMON_ROOT")
+    or os.path.dirname(os.path.abspath(__file__))
+))
+COMMAND_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+BEGIN_MARKER = "-- >>> reaper-agent-bridge (managed) >>>"
+END_MARKER = "-- <<< reaper-agent-bridge (managed) <<<"
+
+
+# ---------------------------------------------------------------------------
+# Environment helpers
+# ---------------------------------------------------------------------------
+
+def find_resource_dir():
+    """Locate REAPER's per-user resource directory on any OS."""
+    env = os.environ.get("REAPER_RESOURCE_PATH")
+    if env:
+        return env
+    system = platform.system()
+    if system == "Darwin":
+        return os.path.expanduser("~/Library/Application Support/REAPER")
+    if system == "Windows":
+        appdata = os.environ.get("APPDATA") or os.path.expanduser("~/AppData/Roaming")
+        return os.path.join(appdata, "REAPER")
+    # Linux / other Unix: REAPER uses XDG_CONFIG_HOME/REAPER (default ~/.config/REAPER).
+    xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(xdg, "REAPER")
+
+
+def reaper_running():
+    """Best-effort check that REAPER is running. Returns True/False/None
+    (None = could not determine; fall back to the heartbeat)."""
+    system = platform.system()
+    try:
+        if system == "Windows":
+            r = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq REAPER.exe", "/NH"],
+                capture_output=True, text=True, timeout=6,
+            )
+            return "reaper.exe" in (r.stdout or "").lower()
+        if system == "Darwin":
+            r = subprocess.run(["pgrep", "-x", "REAPER"], capture_output=True, timeout=6)
+            if r.returncode == 0:
+                return True
+            # pgrep uses 1 for a clean no-match. Any other failure means the
+            # process table could not be queried, so let the heartbeat decide.
+            return False if r.returncode == 1 else None
+        # Linux: the binary is lowercase `reaper`, and packaging varies (wine,
+        # flatpak wrappers), so match both cases and treat a miss as UNKNOWN
+        # rather than dead — the heartbeat is the authority there.
+        r = subprocess.run(["pgrep", "-x", "REAPER|reaper"],
+                           capture_output=True, timeout=6)
+        return True if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def load_drum_config(bridge_root):
+    """Read optional drum-config.json (user kit defaults). None if absent."""
+    path = os.path.join(bridge_root, "drum-config.json")
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+
+# ---------------------------------------------------------------------------
+# FX name resolver (replaces the grep/sed pipeline in fxload.sh / send_cmd.sh)
+# ---------------------------------------------------------------------------
+
+# Trailing "Name (Vendor)" at end of a cache line, excluding junk prefix chars.
+_FX_NAME_RE = re.compile(r"[^,|{=]+\([A-Za-z0-9 .&_-]+\)\s*$")
+
+
+def resolve_fx_name(query, resource_dir=None):
+    """Resolve a fuzzy plugin query to REAPER's exact listed name.
+
+    Tokenises the query on non-alphanumerics (splitting letter<->digit
+    boundaries too), then matches the resulting tokens in order with any
+    separators between them against REAPER's VST/CLAP/AU plugin cache .ini
+    files. Returns the shortest clean "Name (Vendor)" candidate, or None.
+    """
+    resource_dir = resource_dir or find_resource_dir()
+    if not query or not os.path.isdir(resource_dir):
+        return None
+    q = re.sub(r"([A-Za-z])([0-9])", r"\1 \2", query)
+    q = re.sub(r"([0-9])([A-Za-z])", r"\1 \2", q)
+    tokens = re.findall(r"[A-Za-z0-9]+", q)
+    if not tokens:
+        return None
+    pattern = re.compile(r"[^A-Za-z0-9]*".join(tokens), re.IGNORECASE)
+    candidates = []
+    for name_glob in ("reaper-vstplugins*.ini", "reaper-clap*.ini", "reaper-auplugins*.ini"):
+        for fpath in glob.glob(os.path.join(resource_dir, name_glob)):
+            try:
+                with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                    for line in fh:
+                        if pattern.search(line):
+                            # REAPER marks instruments with a trailing !!!VSTi,
+                            # and _FX_NAME_RE anchors on "(Vendor)" at end of
+                            # line, so without stripping the flag first NO
+                            # INSTRUMENT EVER RESOLVES. "serum 2" fell through
+                            # to "Serum 2 FX (Xfer Records)", the effect build,
+                            # which loads and plays nothing; Kontakt, ReaSynth,
+                            # ReaSynDr and ReaSamplOmatic5000 all returned
+                            # NO_MATCH. Found while wiring the scoring studio.
+                            probe = line.rstrip()
+                            if probe.endswith("!!!VSTi"):
+                                probe = probe[:-len("!!!VSTi")].rstrip()
+                            m = _FX_NAME_RE.search(probe)
+                            if m:
+                                cand = m.group().strip()
+                                if cand:
+                                    candidates.append(cand)
+            except OSError:
+                continue
+    if not candidates:
+        return None
+    return min(candidates, key=len)
+
+
+def repair_set_fx_param(payload):
+    """Accept the obvious field names for the normalized value."""
+    if "normalized_value" in payload:
+        return payload
+    for syn in ("value", "norm", "normalized"):
+        if syn in payload:
+            payload["normalized_value"] = payload[syn]
+            del payload[syn]
+            break
+    return payload
+
+
+# ---------------------------------------------------------------------------
+# Core send / poll
+# ---------------------------------------------------------------------------
+
+class StaleReplyError(OSError):
+    """A leftover outbox reply with this command id exists and cannot be
+    removed (e.g. a Windows/OneDrive file lock). Sending anyway would read
+    the OLD reply back as this command's result — fail closed instead."""
+
+
+def _command_id(value):
+    """Normalize a queue filename component or reject it before filesystem use."""
+    cid = str(value if value is not None else "").strip()
+    if not cid or cid == "<auto>":
+        return None
+    if not COMMAND_ID_RE.fullmatch(cid) or ".." in cid:
+        raise ValueError(
+            "unsafe command id; use letters, numbers, dot, underscore, or hyphen "
+            "without '..'"
+        )
+    return cid
+
+
+def _queue_file(bridge_root, queue_name, cid):
+    """Build a queue path and prove it remains inside its intended directory."""
+    queue_dir = os.path.abspath(os.path.join(bridge_root, queue_name))
+    path = os.path.abspath(os.path.join(queue_dir, cid + ".json"))
+    try:
+        contained = os.path.commonpath((queue_dir, path)) == queue_dir
+    except ValueError:
+        contained = False
+    if not contained:
+        raise ValueError("unsafe queue path")
+    return path
+
+
+def send_command(cmd, wait=False, timeout_ms=30000, bridge_root=None, verbose=False):
+    """Write one command JSON atomically to inbox/, optionally poll outbox/.
+
+    Returns (id, reply_text_or_None). Raises TimeoutError if --wait times out.
+    Auto-fills id / version / created_at / created_by when absent.
+    """
+    bridge_root = bridge_root or BRIDGE_ROOT
+    cmd = dict(cmd)
+    cid = _command_id(cmd.get("id"))
+    if cid is None:
+        stamp = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        cid = f"cli-{stamp}-{secrets.token_hex(8)}"
+    cmd["id"] = cid
+    cmd.setdefault("version", 3)
+    cmd.setdefault("created_at", datetime.datetime.now().astimezone().isoformat())
+    cmd.setdefault("created_by", "cli")
+    cmd.setdefault("dry_run", False)
+    token = _auth_token(bridge_root)
+    if token:
+        cmd.setdefault("token", token)
+
+    inbox = _queue_file(bridge_root, "inbox", cid)
+    outbox = _queue_file(bridge_root, "outbox", cid)
+    os.makedirs(os.path.dirname(inbox), exist_ok=True)
+
+    # A leftover reply with this id (fixed-id command file, or an unread reply
+    # from a previous run) would be read back as THIS command's result. If it
+    # exists but cannot be removed (Windows file lock, OneDrive sync), fail
+    # CLOSED before queuing anything: proceeding would return the stale reply
+    # as this command's result while the new command stays queued to execute
+    # later against whatever project is open then.
+    try:
+        os.remove(outbox)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        raise StaleReplyError(
+            f"stale reply {outbox} exists and could not be removed ({e}); "
+            "refusing to send — the old reply would be read back as this "
+            "command's result")
+
+    data = json.dumps(cmd, separators=(",", ":"))
+    tmp = inbox + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(data)
+    os.replace(tmp, inbox)  # atomic rename; poller skips *.tmp
+    if verbose:
+        print(f"Sent command {cid}")
+    if not wait:
+        return cid, None
+
+    started_wait = time.monotonic()
+    deadline = started_wait + timeout_ms / 1000.0
+    while time.monotonic() < deadline:
+        if os.path.isfile(outbox):
+            # A transient Windows lock (OneDrive sync, antivirus scan) can
+            # deny the first read of a reply the bridge just published. That
+            # reply may acknowledge an already-applied mutation — crashing
+            # here would exit 1 ("nothing was changed") while the change is
+            # live. Keep polling until the deadline instead.
+            try:
+                with open(outbox, "r", encoding="utf-8") as f:
+                    reply = f.read()
+            except OSError:
+                time.sleep(0.005 if time.monotonic() - started_wait < 1 else 0.025)
+                continue
+            # The reader owns its reply: the bridge no longer count-sweeps
+            # outbox/ (it was deleting unread replies on big batches), so delete
+            # it here once read to keep the queue from growing unbounded.
+            try:
+                os.remove(outbox)
+            except OSError:
+                pass
+            return cid, reply
+        time.sleep(0.005 if time.monotonic() - started_wait < 1 else 0.025)
+    # Withdraw the command so a TIMEOUT report stays true: a file left in
+    # inbox/ (or requeued from processing/ at bridge startup) would still
+    # execute later against whatever project is open then. If the bridge
+    # already grabbed it, this remove misses; the bridge's requeue age gate
+    # covers that side.
+    try:
+        os.remove(inbox)
+    except OSError:
+        pass
+    raise TimeoutError(f"timed out after {timeout_ms}ms waiting for {outbox}")
+
+
+# Commands that block REAPER's main thread on a synchronous render. The defer
+# loop stops for the whole render, so no heartbeat, no reply, nothing until it
+# finishes. 10s is fine for every other command and far too short for these:
+# a 30s capture at 1x plus render setup routinely outruns it, and the CLI then
+# reports TIMEOUT for a command that succeeds and writes its result to outbox/
+# seconds later. That reads as a failure and it is not one.
+RENDER_BLOCKING_TYPES = frozenset({"capture_track_audio", "render"})
+
+
+def render_timeout_ms(cmd_type, payload, explicit=None):
+    """Reply timeout for one command, in ms. `explicit` (a --timeout the user
+    actually typed) always wins; otherwise render-blocking commands get a
+    budget scaled to the capture length they were asked for."""
+    if explicit is not None:
+        return explicit
+    if cmd_type not in RENDER_BLOCKING_TYPES:
+        return 10000
+    try:
+        seconds = float(payload.get("seconds") or payload.get("duration_seconds") or 0)
+    except (TypeError, ValueError):
+        seconds = 0.0
+    if not (seconds > 0):
+        # The bridge's own default capture length when the payload omits it.
+        seconds = 30.0
+    # Render setup, the file write and the stats read are roughly fixed cost;
+    # the render itself is about realtime. 60s of headroom over the material
+    # covers both without waiting minutes on a genuinely dead bridge.
+    return int((seconds + 60) * 1000)
+
+
+def send_type(cmd_type, payload, bridge_root=None, timeout_ms=10000,
+              resolve=True, repair=True, verbose=False):
+    """Send a command by type + payload, wait for the reply, return parsed dict.
+
+    On add_fx: resolves a fuzzy fx_name to the exact installed name.
+    On set_fx_param: repairs value/norm/normalized -> normalized_value.
+    Returns the parsed result JSON (always a dict; ok:false on timeout/bad reply).
+    """
+    payload = dict(payload)
+    if resolve and cmd_type == "add_fx" and payload.get("fx_name"):
+        name = resolve_fx_name(payload["fx_name"])
+        if name:
+            if verbose:
+                print(f"[cmd] resolved {payload['fx_name']!r} -> {name}", file=sys.stderr)
+            payload["fx_name"] = name
+    if repair and cmd_type == "set_fx_param":
+        payload = repair_set_fx_param(payload)
+    cmd = {"version": 3, "type": cmd_type, "payload": payload}
+    try:
+        _cid, raw = send_command(cmd, wait=True, timeout_ms=timeout_ms,
+                                 bridge_root=bridge_root, verbose=verbose)
+    except TimeoutError as e:
+        return {"ok": False, "error": {"code": "TIMEOUT", "details": str(e)}}
+    except StaleReplyError as e:
+        return {"ok": False, "error": {"code": "STALE_REPLY_LOCKED",
+                                       "details": str(e)}}
+    if raw is None:
+        return {"ok": False, "error": {"code": "NO_REPLY", "details": "no reply"}}
+    try:
+        reply = json.loads(raw)
+    except Exception as e:
+        return {"ok": False, "error": {"code": "BAD_REPLY", "details": str(e)}}
+    if not isinstance(reply, dict):
+        # A syntactically valid non-object (raw null, a bare number...) is
+        # still a broken reply; returning it raw made callers crash or, in
+        # verify, misread "outcome unknown" as "nothing was changed".
+        return {"ok": False, "error": {"code": "BAD_REPLY",
+                                       "details": "reply is not a JSON object"}}
+    return reply
+
+
+def scan_fx_parameter_data(base, bridge_root, include_values=False):
+    """Full identity + every parameter of one FX across paginated replies.
+
+    The first page owns the resolved track/FX identity. Keeping that metadata
+    alongside the combined parameter list lets MCP and later structured clients
+    use real GUIDs instead of trying to reconstruct identity from names/indices.
+    Returns (data, None) or (None, error).
+    """
+    payload = dict(base)
+    if include_values:
+        payload["include_values"] = True
+    params, offset = [], 0
+    identity = {}
+    while True:
+        res = send_type("get_fx_parameters", {**payload, "limit": 1000, "offset": offset},
+                        bridge_root=bridge_root, resolve=False, repair=False)
+        if not res.get("ok"):
+            return None, res.get("error")
+        data = res.get("data", {})
+        if not identity:
+            identity = {key: data[key] for key in ("track", "fx") if key in data}
+        chunk = data.get("parameters", [])
+        params.extend(chunk)
+        # Current bridge replies nest paging metadata; tolerate the legacy
+        # top-level shape too so older installed bridges remain compatible.
+        paging = data.get("paging") or data
+        if not paging.get("has_more") or not chunk:
+            return {**identity, "parameters": params}, None
+        offset += len(chunk)
+
+
+def scan_fx_parameters(base, bridge_root, include_values=False):
+    """Backward-compatible list-only wrapper used by the existing CLI."""
+    data, err = scan_fx_parameter_data(base, bridge_root, include_values)
+    if err:
+        return None, err
+    return data["parameters"], None
+
+
+# ---------------------------------------------------------------------------
+# Small shared bits
+# ---------------------------------------------------------------------------
+
+def _num_from(s):
+    """First (signed) number in a formatted string; handles kHz."""
+    if s is None:
+        return None
+    text = str(s)
+    if "inf" in text.lower():
+        return 1e30 if "-" not in text.lower() else -1e30
+    m = re.search(r"[-+]?\d+(?:\.\d+)?", text)
+    if not m:
+        return None
+    v = float(m.group())
+    if "khz" in text.lower():
+        v *= 1000
+    return v
+
+
+def _exit_for(res):
+    """Exit code from a parsed reply: 0 if ok, 1 otherwise."""
+    return 0 if (isinstance(res, dict) and res.get("ok")) else 1
+
+
+def _auth_token(bridge_root):
+    """Optional shared secret from bridge_config.json. None if the user set none.
+    The bridge reads the same key, so setting auth_token once wires both sides."""
+    path = os.path.join(bridge_root, "bridge", "bridge_config.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return (json.load(f).get("auth_token") or "").strip() or None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Subcommands
+# ---------------------------------------------------------------------------
+
+def cmd_send(args):
+    if not os.path.isfile(args.file):
+        print(f"error: command JSON file not found: {args.file!r}", file=sys.stderr)
+        return 1
+    with open(args.file, "r", encoding="utf-8") as f:
+        try:
+            cmd = json.load(f)
+        except Exception as e:
+            print(f"error: could not parse {args.file}: {e}", file=sys.stderr)
+            return 1
+    try:
+        cid, reply = send_command(cmd, wait=args.wait, timeout_ms=args.timeout,
+                                  bridge_root=args.bridge_root, verbose=True)
+    except (TimeoutError, ValueError, StaleReplyError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        if isinstance(e, TimeoutError):
+            print("       (is the bridge running? try: python3 reaperd.py status)",
+                  file=sys.stderr)
+        return 1
+    if reply is not None:
+        print(reply)
+        # The installer points users here to verify the bridge; exiting 0 on
+        # an ok:false reply would report a broken command as success.
+        try:
+            res = json.loads(reply)
+        except ValueError:
+            print("error: reply is not valid JSON", file=sys.stderr)
+            return 1
+        return _exit_for(res)
+    return 0
+
+
+def cmd_cmd(args):
+    try:
+        payload = json.loads(args.payload)
+    except Exception as e:
+        print(f"error: payload is not valid JSON: {e}", file=sys.stderr)
+        return 1
+    res = send_type(args.type, payload, bridge_root=args.bridge_root,
+                    timeout_ms=render_timeout_ms(args.type, payload, args.timeout),
+                    verbose=True)
+    print(json.dumps(res, separators=(",", ":")))
+    return _exit_for(res)
+
+
+def cmd_status(args):
+    ok = status_ok(args.bridge_root, quiet=args.quiet)
+    return 0 if ok else 1
+
+
+# Mirrors the bridge's own singleton guard and __startup.lua's watchdog. Kept
+# as constants here so the status text cannot quietly drift from the Lua.
+LOCK_STALE_SECS = 60          # bridge.lua: reclaim a lock older than this
+WATCHDOG_TICK_SECS = 10       # __startup.lua: how often it checks
+
+
+def lock_reclaim_eta(bridge_root=None):
+    """Seconds until a dead bridge's lock can be reclaimed, or None.
+
+    None means "nothing is blocking a reload": no lock, unreadable, already
+    stale, or a render-busy lock (which the guard never reclaims on age, so
+    waiting is not the answer there).
+    """
+    bridge_root = bridge_root or BRIDGE_ROOT
+    try:
+        with open(os.path.join(bridge_root, "logs", "bridge.lock"),
+                  "r", encoding="utf-8") as f:
+            lock = json.load(f)
+        started = float(lock.get("started"))
+    except Exception:
+        return None
+    if (lock.get("busy") or "none") == "render":
+        return None
+    remaining = LOCK_STALE_SECS - (time.time() - started)
+    if remaining <= 0:
+        return None
+    # The watchdog only looks every WATCHDOG_TICK_SECS, so the worst case is a
+    # full tick after the lock goes stale. Quote the worst case, not the best.
+    return remaining + WATCHDOG_TICK_SECS
+
+
+def status_ok(bridge_root=None, quiet=False):
+    """True if the bridge heartbeat is fresh (or busy). Prints unless quiet."""
+    bridge_root = bridge_root or BRIDGE_ROOT
+    hb = os.path.join(bridge_root, "bridge", "heartbeat.json")
+
+    def say(msg):
+        if not quiet:
+            print(msg)
+
+    if not os.path.isfile(hb):
+        running = reaper_running()
+        if running is False:
+            say("DEAD: REAPER is not running. Launch REAPER (auto-start will load the bridge).")
+            return False
+        if running:
+            say("DEAD: REAPER is up but no heartbeat file. Bridge never loaded.")
+        else:
+            say("DEAD: no heartbeat file. Bridge never loaded (is REAPER running?).")
+        say("      Fix: python3 setup/install.py, then relaunch REAPER.")
+        return False
+    age = time.time() - os.path.getmtime(hb)
+    proj = alive = busy = "?"
+    try:
+        with open(hb, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        proj = d.get("project_name", "?")
+        alive = d.get("alive_at", "?")
+        busy = d.get("busy") or "none"
+    except Exception:
+        pass
+    fresh_secs = 15
+    if age <= fresh_secs:
+        say(f"CONNECTED: heartbeat {age:.0f}s old | project: {proj} | alive_at {alive}")
+        return True
+    busy_cap = 15 * 60  # a busy flag outliving any real render means a death mid-render
+    if busy != "none" and age <= busy_cap:
+        say(f"BUSY: {busy} in progress | heartbeat {age:.0f}s old | project: {proj}")
+        say(f"      A synchronous {busy} blocks the loop on purpose; this is not a death.")
+        return True
+    running = reaper_running()
+    if running is False:
+        say("DEAD: REAPER is not running. Launch REAPER (auto-start will load the bridge).")
+        return False
+    if busy != "none":
+        say(f"STALE: heartbeat says busy={busy} but is {age:.0f}s old (>{busy_cap}s) —")
+        say("       that is a bridge that died mid-operation, not a live one.")
+        return False
+    say(f"STALE: heartbeat {age:.0f}s old (>{fresh_secs}s). The bridge loop has stopped.")
+    say(f"       Last alive_at: {alive} | project: {proj}")
+    reviving_in = lock_reclaim_eta(bridge_root)
+    if reviving_in is not None:
+        # The dead bridge still holds a lock that is not stale yet, so nothing
+        # can replace it: a re-run reads that fresh lock, loses the ownership
+        # race and stops. Telling someone to re-run the action here sends them
+        # to do a thing that cannot work and then doubt the fix they just made.
+        # __startup.lua's watchdog polls every 10s and reloads once the lock
+        # goes stale, so the honest instruction is to wait.
+        say(f"       WAIT, do not re-run: the dead bridge's lock is still fresh, so a")
+        say(f"       re-run would lose the ownership race and stop. __startup.lua's")
+        say(f"       watchdog reclaims it and reloads in about {reviving_in:.0f}s.")
+        say("       (This is the normal shape of a fast REAPER restart.)")
+    else:
+        say("       Revive: re-run the bridge action (Actions list), or relaunch REAPER so")
+        say("       __startup.lua reloads it. Then re-run this check.")
+    return False
+
+
+def _bridge_sender(bridge_root):
+    """A verifyloop-shaped sender bound to one bridge root. Keeps all
+    transport (atomic writes, auth token, timeout handling) in send_type."""
+    import verifyloop  # callers (cmd_measure/cmd_verify) already import it
+
+    def sender(cmd_type, payload, timeout_ms=verifyloop.DEFAULT_SENDER_TIMEOUT_MS):
+        return send_type(cmd_type, payload, bridge_root=bridge_root,
+                         timeout_ms=timeout_ms, resolve=False, repair=False)
+    return sender
+
+
+def _print_json_result(res):
+    """Print a measure/verify result as one JSON line.
+
+    allow_nan=False: emitting bare NaN would be invalid JSON for the MCP
+    path; verifyloop sanitizes non-finite values, this enforces it. The
+    fallback mirrors the MCP result path: a non-finite float that slipped
+    through (e.g. copied verbatim from a bridge reply) must not turn
+    --json mode into a traceback after the mutation may already have run.
+    """
+    import verifyloop
+    try:
+        print(json.dumps(res, separators=(",", ":"), allow_nan=False))
+    except ValueError:
+        print(json.dumps(verifyloop._sanitize_nonfinite(res),
+                         separators=(",", ":"), allow_nan=False))
+
+
+def cmd_measure(args):
+    import verifyloop
+    res = verifyloop.measure(
+        _bridge_sender(args.bridge_root), args.track,
+        seconds=args.seconds, start_seconds=args.start,
+        keep_wav=args.keep_wav)
+    if args.json:
+        _print_json_result(res)
+    elif res.get("ok"):
+        print(verifyloop.format_measure(res))
+    else:
+        err = res.get("error") or {}
+        print(f"[measure] REFUSED {err.get('code')}: {err.get('details')}",
+              file=sys.stderr)
+        for b in res.get("blockers") or []:
+            print(f"[measure]   blocker {b.get('code')}: {b.get('message')}",
+                  file=sys.stderr)
+        kept = res.get("file_path") or res.get("output_file")
+        if kept and os.path.isfile(kept):
+            print(f"[measure]   capture WAV (kept for debugging): {kept}",
+                  file=sys.stderr)
+    return 0 if res.get("ok") else 1
+
+
+# verify's options, shared between the subparser (options BEFORE the track)
+# and the re-parse of anything argparse.REMAINDER swallowed (options AFTER
+# the track but before `--`). Without the re-parse, `verify Bass --json --
+# ...` silently dropped --json into the mutation text.
+def _add_verify_options(parser):
+    parser.add_argument("--seconds", type=float, default=None,
+                        help="capture length 1-60 (default 10)")
+    parser.add_argument("--start", type=float, default=None,
+                        help="capture start in seconds (default: time "
+                             "selection start if active, else edit cursor)")
+    parser.add_argument("--json", action="store_true",
+                        help="machine-readable JSON instead of the human report")
+    parser.add_argument("--keep-wav", action="store_true",
+                        help="keep the capture WAVs (default: delete after analysis)")
+
+
+def _split_verify_mutation(args):
+    """Recover options that landed in args.mutation and extract the mutation
+    (type, payload-text). Returns (cmd_type, payload_text, None) or
+    (None, None, error_message)."""
+    rest = list(args.mutation)
+    if "--" in rest:
+        cut = rest.index("--")
+        head, rest = rest[:cut], rest[cut + 1:]
+    else:
+        # No `--` separator: peel leading option-looking tokens (this is how
+        # `verify Bass --help` reaches the help text instead of a missing-
+        # mutation error). Option VALUES can't be recovered here — the error
+        # below tells the user to add the `--`.
+        split = 0
+        while split < len(rest) and rest[split].startswith("-"):
+            split += 1
+        head, rest = rest[:split], rest[split:]
+    if head:
+        # add_help=True so a trailing `--help` prints the verify options and
+        # exits 0 instead of surfacing as a missing-mutation error.
+        opts = argparse.ArgumentParser(
+            prog="reaperd verify", add_help=True,
+            description="Full form: reaperd verify <track> [options] "
+                        "-- <type> '<payload-json>'")
+        _add_verify_options(opts)
+        try:
+            parsed, unknown = opts.parse_known_args(head)
+        except SystemExit as e:
+            if e.code == 0:  # --help was handled; propagate the clean exit
+                raise
+            return None, None, (f"could not parse verify options: {head} "
+                                "(tip: put `--` between the options and the "
+                                "mutation type)")
+        if unknown:
+            return None, None, (f"unrecognized text before '--': {unknown} "
+                                "(options go before '--'; the mutation goes "
+                                "after it)")
+        for name, default in (("seconds", None), ("start", None),
+                              ("json", False), ("keep_wav", False)):
+            value = getattr(parsed, name)
+            if value != default:
+                setattr(args, name, value)
+    if len(rest) != 2:
+        return None, None, ("verify needs `-- <type> '<payload-json>'` "
+                            "(exactly a command type and one payload argument "
+                            "after `--`)")
+    return rest[0], rest[1], None
+
+
+def cmd_verify(args):
+    import verifyloop
+    cmd_type, payload_text, parse_error = _split_verify_mutation(args)
+    if parse_error:
+        print(f"error: {parse_error}", file=sys.stderr)
+        return 1
+
+    def _reject_nonfinite(text):
+        # json.loads happily parses NaN/Infinity, but the result could never
+        # be re-emitted as valid JSON and NaN poisons every threshold
+        # comparison downstream. Refusing here is honest: nothing has run yet.
+        raise ValueError(f"non-finite constant {text} is not allowed in the "
+                         "payload (NaN/Infinity cannot round-trip as JSON)")
+
+    try:
+        payload = json.loads(payload_text, parse_constant=_reject_nonfinite)
+    except Exception as e:
+        print(f"error: payload is not valid JSON: {e}", file=sys.stderr)
+        return 1
+    if not isinstance(payload, dict):
+        print("error: payload must be a JSON object", file=sys.stderr)
+        return 1
+
+    br = args.bridge_root
+
+    def mutator(mtype, mpayload):
+        # Same path `cmd` uses: add_fx name resolution + set_fx_param repair.
+        # 30 s: batches and heavier mutations outlive the 10 s default, and a
+        # premature TIMEOUT here means "outcome unknown" (exit 2), not a
+        # cheap retry.
+        return send_type(mtype, mpayload, bridge_root=br, timeout_ms=30000,
+                         resolve=True, repair=True)
+
+    def progress(msg):
+        # Step markers go to stderr as they happen, so a process killed
+        # mid-verify still leaves evidence of whether the mutation applied.
+        print(f"[verify] {msg}", file=sys.stderr, flush=True)
+
+    res = verifyloop.verify(
+        _bridge_sender(br), mutator, args.track, cmd_type, payload,
+        seconds=args.seconds, start_seconds=args.start,
+        keep_wav=args.keep_wav, progress=progress)
+    if args.json:
+        _print_json_result(res)
+    else:
+        print(verifyloop.format_verify(res))
+    # Default 2, not 1: by this point the mutation may have run, so a result
+    # missing exit_code must fail toward "unverified", never "not applied".
+    return res.get("exit_code", 2)
+
+
+def cmd_fxload(args):
+    name = resolve_fx_name(args.query)
+    if not name:
+        print(f"NO_MATCH: nothing installed matching {args.query!r}", file=sys.stderr)
+        return 1
+    track = args.track or "master"
+    print(f"[fxload] resolved {args.query!r} -> {name}  (track: {track})")
+    res = send_type("add_fx", {"target_track_name": track, "fx_name": name, "show": False},
+                    bridge_root=args.bridge_root, verbose=False)
+    print(json.dumps(res, separators=(",", ":")))
+    return _exit_for(res)
+
+
+def chain_slug(track_name):
+    """Chain file name for a track: lowercase, runs of non-alphanumerics become
+    one hyphen, and a trailing ' - stem' (REAPER's stem-render suffix) goes,
+    so 'Kick - stem' saves as 'kick', not 'kick-stem'. 'MASTER' is 'master'."""
+    base = re.sub(r"\s*-\s*stem\s*$", "", track_name, flags=re.IGNORECASE)
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", base).strip("-").lower()
+    return slug or "track"
+
+
+def cmd_save_chain(args):
+    name = args.name or chain_slug(args.track)
+    res = send_type("save_fx_chain",
+                    {"target_track_name": args.track, "chain_name": name,
+                     "overwrite": bool(args.overwrite)},
+                    bridge_root=args.bridge_root, verbose=False)
+    if res.get("ok"):
+        d = res.get("data") or {}
+        print(f"[save-chain] {args.track} -> {d.get('chain', {}).get('path')}  "
+              f"({d.get('chain', {}).get('fx_in_chain')} FX)")
+    print(json.dumps(res, separators=(",", ":")))
+    return _exit_for(res)
+
+
+def cmd_snapshot_chains(args):
+    """Every track with track FX, master included, becomes one .RfxChain named
+    by its slug. Existing files are skipped (reported) unless --overwrite, so a
+    re-run after one dialed-in change never silently replaces the others."""
+    ctx = send_type("get_context", {}, bridge_root=args.bridge_root, verbose=False)
+    if not ctx.get("ok"):
+        print(json.dumps(ctx, separators=(",", ":")))
+        return _exit_for(ctx)
+    tracks = (ctx.get("data") or {}).get("tracks") or []
+    rows = []
+    for t in tracks:
+        if not t.get("fx"):
+            continue
+        track = "master" if t.get("index") == 0 else t.get("name", "")
+        name = f"{args.prefix}{chain_slug(track)}"
+        rows.append((track, name, len(t["fx"])))
+    if not rows:
+        print("[snapshot-chains] no tracks with FX in the open project")
+        return 1
+    failures = 0
+    for track, name, count in rows:
+        if args.dry_run:
+            print(f"[snapshot-chains] would save {track!r} -> {name}.RfxChain ({count} FX)")
+            continue
+        res = send_type("save_fx_chain",
+                        {"target_track_name": track, "chain_name": name,
+                         "overwrite": bool(args.overwrite)},
+                        bridge_root=args.bridge_root, verbose=False)
+        if res.get("ok"):
+            print(f"[snapshot-chains] saved   {track!r} -> {name}.RfxChain ({count} FX)")
+        else:
+            code = (res.get("error") or {}).get("code") or "?"
+            if code == "CHAIN_EXISTS":
+                print(f"[snapshot-chains] skipped {track!r} -> {name}.RfxChain exists (use --overwrite)")
+            else:
+                print(f"[snapshot-chains] FAILED  {track!r}: {code}")
+            failures += 1
+    return 1 if failures else 0
+
+
+def cmd_setparam(args):
+    br = args.bridge_root
+    # 1. Resolve track -> guid (or master).
+    if args.track == "master":
+        base = {"target_track_name": "master"}
+    else:
+        ctx = send_type("get_context", {"include_fx": False}, bridge_root=br,
+                        resolve=False, repair=False)
+        if not ctx.get("ok"):
+            print(f"[setparam] ERROR: get_context failed: {ctx.get('error')}",
+                  file=sys.stderr)
+            return 1
+        guid = None
+        for t in ctx.get("data", {}).get("tracks", []):
+            if t.get("name") == args.track:
+                guid = t.get("guid")
+                break
+        if not guid:
+            print(f"[setparam] ERROR: track {args.track!r} not found", file=sys.stderr)
+            return 1
+        base = {"target_track_guid": guid}
+
+    # 2. FX selector. A bare #index needs an explicit scope (bridge rejects an
+    # ambiguous one); the CLI's #N always means a track FX.
+    if args.fx.startswith("#"):
+        base = {**base, "fx_index": int(args.fx[1:]), "fx_scope": "track"}
+    else:
+        base = {**base, "fx_name_contains": args.fx}
+
+    # 3. Scan params.
+    params, err = scan_fx_parameters(base, br)
+    if err is not None:
+        print(f"[setparam] ERROR: scan failed: {err}", file=sys.stderr)
+        return 1
+
+    # 4. Resolve param by #index or unique substring.
+    if args.param.startswith("#"):
+        idx = int(args.param[1:])
+        match = next((p for p in params if p.get("index") == idx), None)
+        if not match:
+            print(f"[setparam] ERROR: param index {idx} out of range", file=sys.stderr)
+            return 1
+    else:
+        q = args.param.lower()
+        matches = [p for p in params if q in (p.get("name") or "").lower()]
+        if not matches:
+            print(f"[setparam] ERROR: no param matches {args.param!r} on this FX",
+                  file=sys.stderr)
+            print("[setparam] Available params:", file=sys.stderr)
+            for p in params[:30]:
+                print(f'  #{p.get("index")}  {p.get("name")} = {p.get("formatted_value")}',
+                      file=sys.stderr)
+            return 1
+        if len(matches) > 1:
+            print(f"[setparam] ERROR: {args.param!r} matched {len(matches)} params "
+                  f"(ambiguous):", file=sys.stderr)
+            for p in matches:
+                print(f'  #{p.get("index")}  {p.get("name")} = {p.get("formatted_value")}',
+                      file=sys.stderr)
+            print("[setparam] Narrow with a longer substring, or use #<index>.",
+                  file=sys.stderr)
+            return 1
+        match = matches[0]
+
+    pidx = match.get("index")
+    pname = match.get("name")
+    before = match.get("formatted_value")
+    print(f'[setparam] track={args.track}  fx={args.fx}  param=#{pidx} '
+          f'{pname!r}  before={before}  target={args.value}')
+
+    # 5. Set: norm= for direct normalized, else formatted_value (bridge searches).
+    if args.value.startswith("norm="):
+        payload = {**base, "param_index": pidx, "normalized_value": float(args.value[5:])}
+    else:
+        payload = {**base, "param_index": pidx, "formatted_value": args.value}
+    res = send_type("set_fx_param", payload, bridge_root=br, resolve=False, repair=False)
+    if not res.get("ok"):
+        print(f"[setparam] ERROR: set failed: {res.get('error')}", file=sys.stderr)
+        return 1
+
+    # 6. Verify by re-reading the formatted value.
+    params2, err2 = scan_fx_parameters(base, br)
+    if err2 is not None:
+        print(f"[setparam] ERROR: verify re-scan failed: {err2} "
+              f"— set was sent but the landed value is UNVERIFIED.", file=sys.stderr)
+        return 1
+    after = None
+    for p in params2:
+        if p.get("index") == pidx:
+            after = p.get("formatted_value")
+            break
+    print(f"[setparam] AFTER: {after}")
+    if args.value.startswith("norm="):
+        print(f"[setparam] RESULT: set {pname} to normalized {args.value[5:]} "
+              f"(displays as {after})")
+        return 0
+    return _judge_landed(pname, args.value, after)
+
+
+def _judge_landed(pname, target, after):
+    """Exit code for a formatted-value set: 0 when the landed display is on
+    target (or close), 1 on a real miss. Split out so the tolerance logic is
+    testable without a live bridge."""
+    tn = _num_from(target)
+    an = _num_from(after)
+    if tn is None:
+        # Enum/string target ("Bell", "Off"): no tolerance math; compare text.
+        if after is not None and str(after).strip().lower() == str(target).strip().lower():
+            print(f"[setparam] RESULT: OK — {pname} = {after}")
+            return 0
+        print(f"[setparam] RESULT: MISSED — {pname} displays {after!r}, "
+              f"target was {target!r}.", file=sys.stderr)
+        return 1
+    if an is None:
+        print(f"[setparam] RESULT: SET but display is non-numeric ({after}) "
+              f"— UNVERIFIED, re-scan before trusting it.", file=sys.stderr)
+        return 1
+    diff = abs(an - tn)
+    if diff <= max(abs(tn) * 0.02, 0.5):
+        print(f"[setparam] RESULT: OK — {pname} = {after} (target was {target})")
+        return 0
+    if diff <= max(abs(tn) * 0.10, 1.0):
+        print(f"[setparam] RESULT: CLOSE — {pname} = {after} (target was {target}; "
+              f"re-run or use norm= for exact)")
+        return 0
+    print(f"[setparam] RESULT: MISSED — {pname} = {after}, target was {target} "
+          f"(>10% off). NOT claiming success.", file=sys.stderr)
+    return 1
+
+
+def cmd_eq(args):
+    br = args.bridge_root
+    if args.fx.startswith("#"):
+        base = {"target_track_name": args.track, "fx_index": int(args.fx[1:]), "fx_scope": "track"}
+    else:
+        base = {"target_track_name": args.track, "fx_name_contains": args.fx}
+
+    params, err = scan_fx_parameters(base, br, include_values=True)
+    if err is not None:
+        print(f"[eqband] FAILED reading params: {err}", file=sys.stderr)
+        print("[eqband] (AMBIGUOUS_FX = duplicate instances; target one with #0 / #1)",
+              file=sys.stderr)
+        return 1
+
+    # Discover this band's param indices by name across EQ naming conventions.
+    band = args.band
+    band_re = re.compile(r"(^|\b)(eq\s*)?band\s*0*%d\b" % band)
+    band_re2 = re.compile(r"\s*0*%d\s*[:\-]" % band)
+    # Enable-param naming varies: ReaEQ "Enabled", FabFilter Pro-Q "On"/"Used",
+    # others expose only an inverted "Bypass", and some bands are always-on with
+    # no enable param at all. Detect any of them; require only Freq+Gain.
+    roles = [("enable", r"\b(used|enabled?|on|active)\b"),
+             ("bypass", r"\bbypass\b"),
+             ("freq", r"\b(freq(uency)?)\b"),
+             ("gain", r"\bgain\b"), ("q", r"\b(q|bandwidth|width)\b")]
+    idx = {}
+    for p in params:
+        n = (p.get("name") or "").strip().lower()
+        if not (band_re.search(n) or band_re2.match(n)):
+            continue
+        for key, pat in roles:
+            if key not in idx and re.search(pat, n):
+                idx[key] = p.get("index")
+    ifreq, igain, iq = idx.get("freq"), idx.get("gain"), idx.get("q")
+    ienable, enable_inverted = idx.get("enable"), False
+    if ienable is None and idx.get("bypass") is not None:
+        ienable, enable_inverted = idx.get("bypass"), True  # 0.0 = not bypassed = live
+    if ifreq is None or igain is None:
+        print(f"[eqband] could not find Band {band} Frequency/Gain params. "
+              f"This EQ names bands differently.", file=sys.stderr)
+        return 1
+
+    def setn(i, v):
+        return send_type("set_fx_param", {**base, "param_index": i, "normalized_value": v},
+                         bridge_root=br, resolve=False, repair=False).get("ok", False)
+
+    def setfmt(i, display):
+        return send_type("set_fx_param", {**base, "param_index": i, "formatted_value": display},
+                         bridge_root=br, resolve=False, repair=False).get("ok", False)
+
+    # Enable the band FIRST (else the curve stays flat), then dial freq/gain/Q.
+    # Every set's reply matters: a dead bridge mid-sequence must fail loudly,
+    # not fall through to a success banner.
+    sets = []
+    if ienable is not None:
+        sets.append(("enable", setn(ienable, 0.0 if enable_inverted else 1.0)))
+    sets.append(("freq", setfmt(ifreq, f"{args.freq} Hz")))
+    sets.append(("gain", setfmt(igain, f"{args.gain} dB")))
+    if args.q is not None and iq is not None:
+        sets.append(("q", setfmt(iq, str(args.q))))
+    failed = [name for name, ok in sets if not ok]
+    if failed:
+        print(f"[eqband] FAILED: set did not take for: {', '.join(failed)}. "
+              f"Band {band} is NOT verified — do NOT claim success.", file=sys.stderr)
+        return 1
+
+    # Verify: read the band back and report real values.
+    final, ferr = scan_fx_parameters(base, br, include_values=True)
+    if ferr is not None:
+        print(f"[eqband] FAILED verify re-scan: {ferr}. Sets were "
+              f"acknowledged but the band is UNVERIFIED.", file=sys.stderr)
+        return 1
+    pmap = {p.get("index"): p for p in final}
+
+    def fv(i):
+        p = pmap.get(i)
+        return p.get("formatted_value", p.get("value")) if p else "?"
+
+    line = f"[eqband] Band {band} ->"
+    if ienable is not None:
+        line += f"  {'Bypass' if enable_inverted else 'Enabled'}={fv(ienable)}"
+    line += f"  Freq={fv(ifreq)}  Gain={fv(igain)}"
+    if iq is not None:
+        line += f"  Q={fv(iq)}"
+    print(line)
+    if ienable is None:
+        # Always-on band: no enable param exists. All sets returned ok and the
+        # re-scan read the values back, so "live" rests on that evidence.
+        live = True
+    elif enable_inverted:
+        live = True  # bypass display is ambiguous; the un-bypass set returned ok
+    else:
+        live = str(fv(ienable)).strip().lower() in ("used", "on", "enabled", "active", "1", "true", "yes")
+    print("[eqband] RESULT:",
+          "BAND IS LIVE on the curve." if live
+          else "BAND DID NOT TAKE (enable is off) — do NOT claim success.")
+    return 0 if live else 1
+
+
+def _discard(path):
+    """Remove a render that was never inserted; missing file is fine."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def _persist_midi(br, prefix, slug):
+    """A persistent path under rendered-midi/ for a render.
+
+    REAPER imports a .mid by REFERENCE on this build, so the file must OUTLIVE
+    the item — a deleted temp file leaves an empty take (proven live). Renders
+    are kept here (gitignored); the .mid is the take's source of truth.
+    """
+    render_dir = os.path.join(br, "rendered-midi")
+    os.makedirs(render_dir, exist_ok=True)
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", slug)
+    return os.path.join(render_dir, f"{prefix}-{safe}-{secrets.token_hex(3)}.mid")
+
+
+def _render_insert(br, gen_argv, midi, *, track, position, tempo, replace, tag,
+                   sender=None):
+    """Run a generator subprocess that writes `midi`, then insert it onto the
+    track through the bridge. The one write path `shred`, `groove`, and `band`
+    all share. `track` None targets the selected track. `replace` clears the
+    track's region from `position` first, so a re-cut doesn't stack takes.
+    Returns (rc, message). On any failure the orphaned render is discarded.
+
+    `sender(cmd_type, payload, timeout_ms) -> reply dict` is the seam the MCP
+    server uses to reach the same path with its own envelope (it needs a
+    dry_run knob `send_type` does not have). Default is the CLI's own sender.
+    """
+    if sender is None:
+        def sender(cmd_type, payload, timeout_ms):
+            return send_type(cmd_type, payload, bridge_root=br,
+                             timeout_ms=timeout_ms, resolve=False, repair=False)
+    try:
+        r = subprocess.run(gen_argv, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        _discard(midi)
+        return 1, f"[{tag}] ERROR: generator did not finish in 120s"
+    if r.returncode != 0:
+        _discard(midi)
+        return 1, (r.stderr or r.stdout or "").rstrip()
+    lines = [r.stdout.rstrip()] if r.stdout else []
+
+    # `track` is a name, None (the selected track), or a full bridge selector
+    # dict — the MCP server passes the last so GUID and substring targeting
+    # reach this path too. `position` is seconds, None (the edit cursor), or a
+    # position object ({"type":"bar",...}); anything but seconds means `replace`
+    # has no time to clear from and is skipped rather than guessing one.
+    if isinstance(track, dict):
+        sel = {k: v for k, v in track.items() if v is not None}
+        if not sel:
+            sel = {"use_selected_track": True}
+    else:
+        sel = {"target_track_name": track} if track else {"use_selected_track": True}
+    seconds = position if isinstance(position, (int, float)) and not isinstance(
+        position, bool) else None
+    if isinstance(position, dict):
+        pos = position
+    else:
+        pos = ({"type": "time", "seconds": float(seconds)}
+               if seconds is not None else {"type": "cursor"})
+    if replace and seconds is not None:
+        sender("delete_items_in_range",
+               {**sel, "range": {"type": "time", "seconds": float(seconds)},
+                "length_seconds": 600}, 10000)
+    payload = {**sel, "midi_path": midi, "position": pos}
+    if tempo is not None:
+        payload["project_tempo"] = tempo
+    res = sender("insert_midi_file", payload, 20000)
+    if not res.get("ok"):
+        _discard(midi)
+        return 1, f"[{tag}] FAILED: {res.get('error')}"
+    fallback = track if isinstance(track, str) and track else "selected"
+    tname = res.get("data", {}).get("track", {}).get("name", fallback)
+    at = f"{seconds}s" if seconds is not None else (
+        pos.get("type", "cursor") if isinstance(pos, dict) else "cursor")
+    lines.append(f"[{tag}] OK: {tname} @ {at}")
+    return 0, "\n".join(x for x in lines if x)
+
+
+def render_groove(br, *, dsl_path=None, dsl_text=None, track=None, kit_map=None,
+                  seed=None, position=None, tempo=None, replace=False,
+                  sender=None, tag="groove"):
+    """Render a drum DSL and insert it. Returns (rc, message).
+
+    Shared by `cmd_groove`, `band`'s drum leg, and the MCP `insert_groove`
+    tool, so the rendered .mid is persisted by ONE rule. It used to be two:
+    the MCP tool kept its own temp-file copy of this and went on deleting the
+    render after the insert, which leaves an empty take on a REAPER build that
+    imports MIDI by reference.
+    """
+    groovegen = os.path.join(br, "skills", "drum-apparatus", "groovegen.py")
+    if not os.path.isfile(groovegen):
+        return 1, f"[{tag}] ERROR: drum engine not found at {groovegen}"
+    if (dsl_path is None) == (dsl_text is None):
+        return 1, (f"[{tag}] ERROR: needs exactly one DSL source, "
+                   "a file path or inline text")
+    if dsl_path is not None and not os.path.isfile(dsl_path):
+        return 1, f"[{tag}] ERROR: DSL file not found: {dsl_path}"
+
+    name = track if isinstance(track, str) and track else "selected"
+    slug = name + "-" + (os.path.basename(dsl_path) if dsl_path else "inline")
+    midi = _persist_midi(br, "groove", slug)
+    gen = [sys.executable, groovegen, "--out", midi]
+    if dsl_path is not None:
+        gen += ["--dsl", dsl_path]
+    else:
+        # --spec=<text>, not two argv entries: a DSL line starting with '-'
+        # would otherwise be parsed as an option by the engine's argparse.
+        gen.append("--spec=" + dsl_text)
+    if kit_map:
+        gen += ["--map", kit_map]
+    if seed is not None:
+        gen += ["--seed", str(seed)]
+    return _render_insert(br, gen, midi, track=track, position=position,
+                          tempo=tempo, replace=replace, tag=tag, sender=sender)
+
+
+def render_shred(br, *, part, track, seed, map_name, tempo=None, riff=None,
+                 bars_file=None, low_string=None, position=None, replace=False,
+                 sender=None, tag=None):
+    """Render one humanized guitar/bass part and insert it. Returns (rc, message).
+    Shared by `cmd_shred`, `band`'s three string legs, and the MCP tool."""
+    tag = tag or f"shred/{part}"
+    shredgen, midi, gen = _shred_gen_argv(
+        br, part=part, track=track, seed=seed, map_name=map_name, tempo=tempo,
+        riff=riff, bars_file=bars_file, low_string=low_string)
+    if not os.path.isfile(shredgen):
+        return 1, f"[{tag}] ERROR: guitar engine not found at {shredgen}"
+    if bars_file and not os.path.isfile(bars_file):
+        return 1, f"[{tag}] ERROR: riff file not found: {bars_file}"
+    return _render_insert(br, gen, midi, track=track, position=position,
+                          tempo=tempo, replace=replace, tag=tag, sender=sender)
+
+
+def render_band(br, *, guitar_l, guitar_r, bass, drums, riff=None, bars_file=None,
+                dsl=None, map_name="argent_e", drum_map="RS Monarch",
+                seeds=(101, 202, 303), low_string=None, position=0.0, tempo=None,
+                replace=True, sender=None):
+    """Lay down (or re-cut) the whole four-track jam.
+
+    Returns (rc_total, [(rc, message), ...]) — one entry per leg, in cut order,
+    so a caller can route each message by its OWN result instead of sniffing
+    the text. Every leg is attempted even when an earlier one fails: a half-cut
+    jam that reports which tracks landed is fixable, a silent one is not.
+    """
+    shredgen = os.path.join(br, "skills", "guitar-apparatus", "shredgen.py")
+    groovegen = os.path.join(br, "skills", "drum-apparatus", "groovegen.py")
+    for engine in (shredgen, groovegen):
+        if not os.path.isfile(engine):
+            return 1, [(1, f"[band] ERROR: engine not found at {engine}")]
+    dsl = dsl or os.path.join(br, "skills", "guitar-apparatus", "examples",
+                              "jam-e.dsl")
+    if not os.path.isfile(dsl):
+        return 1, [(1, f"[band] ERROR: drum DSL not found: {dsl}")]
+
+    seeds = list(seeds) or [101, 202, 303]
+    while len(seeds) < 3:
+        seeds.append(seeds[-1] + 101)
+
+    rc_total, results = 0, []
+    for part, track, seed in (("guitar", guitar_l, seeds[0]),
+                              ("guitar", guitar_r, seeds[1]),
+                              ("bass", bass, seeds[2])):
+        rc, msg = render_shred(br, part=part, track=track, seed=seed,
+                               map_name=map_name, tempo=tempo, riff=riff,
+                               bars_file=bars_file, low_string=low_string,
+                               position=position, replace=replace, sender=sender,
+                               tag=f"band/{track}")
+        results.append((rc, msg))
+        rc_total |= rc
+    rc, msg = render_groove(br, dsl_path=dsl, track=drums, kit_map=drum_map,
+                            position=position, tempo=tempo, replace=replace,
+                            sender=sender, tag=f"band/{drums}")
+    results.append((rc, msg))
+    rc_total |= rc
+    return rc_total, results
+
+
+def cmd_groove(args):
+    br = args.bridge_root
+    # Instant heartbeat gate: a dead REAPER should fail here in ~0s, not after
+    # the full 20s insert timeout.
+    if not status_ok(br, quiet=True):
+        print("[groove] REAPER is DOWN — relaunch it, nothing inserted.", file=sys.stderr)
+        return 1
+    if not os.path.isfile(args.dsl):
+        print(f"[groove] ERROR: DSL file not found: {args.dsl}", file=sys.stderr)
+        return 1
+    cfg = load_drum_config(br) or {}
+    print(f"[groove] Rendering DSL: {args.dsl}")
+    rc, msg = render_groove(br, dsl_path=args.dsl,
+                            track=args.track or cfg.get("track"),
+                            kit_map=args.map or cfg.get("map"), seed=args.seed,
+                            position=args.position, tempo=args.tempo,
+                            replace=getattr(args, "replace", False))
+    print(msg, file=(sys.stderr if rc else sys.stdout))
+    return rc
+
+
+def cmd_jam(args):
+    if not status_ok(args.bridge_root, quiet=False):
+        print("[jam] REAPER is DOWN — relaunch it, nothing inserted.", file=sys.stderr)
+        return 1
+    text = sys.stdin.read()
+    if not text.strip():
+        print("[jam] ERROR: no DSL on stdin", file=sys.stderr)
+        return 1
+    tmp = tempfile.NamedTemporaryFile(suffix=".dsl", delete=False, mode="w",
+                                      encoding="utf-8")
+    tmp.write(text)
+    tmp.close()
+    # jam always uses the SELECTED track — never guesses a track.
+    jam_args = argparse.Namespace(
+        bridge_root=args.bridge_root, dsl=tmp.name, track=None,
+        position=None, tempo=None, seed=None, map=None)
+    rc = cmd_groove(jam_args)
+    try:
+        os.unlink(tmp.name)
+    except OSError:
+        pass
+    return rc
+
+
+def _shred_gen_argv(br, *, part, track, seed, map_name, tempo, riff, bars_file,
+                    low_string):
+    """Build the (shredgen_path, midi_path, argv) for one guitar/bass render.
+    Shared by `shred` (one part) and `band` (all four)."""
+    shredgen = os.path.join(br, "skills", "guitar-apparatus", "shredgen.py")
+    midi = _persist_midi(br, f"shred-{part}", f"{track}-{seed}")
+    gen = [sys.executable, shredgen, "--part", part, "--map", map_name,
+           "--seed", str(seed), "--tempo", str(tempo or 120), "--out", midi]
+    gen += ["--bars-file", bars_file] if bars_file else ["--riff", riff]
+    if low_string is not None:
+        gen += ["--low-string", str(low_string)]
+    return shredgen, midi, gen
+
+
+def cmd_shred(args):
+    """Render a humanized guitar/bass riff and insert it onto a named track.
+
+    The guitar-side counterpart to `groove`, sharing its `_render_insert` write
+    path. One part per call; `band` lays down the whole double-tracked jam at once.
+    """
+    br = args.bridge_root
+    if not status_ok(br, quiet=True):
+        print("[shred] REAPER is DOWN — relaunch it, nothing inserted.", file=sys.stderr)
+        return 1
+    print(f"[shred] Rendering {args.part}: {args.bars_file or args.riff}")
+    rc, msg = render_shred(br, part=args.part, track=args.track, seed=args.seed,
+                           map_name=args.map, tempo=args.tempo, riff=args.riff,
+                           bars_file=args.bars_file, low_string=args.low_string,
+                           position=args.position,
+                           replace=getattr(args, "replace", False))
+    print(msg, file=(sys.stderr if rc else sys.stdout))
+    return rc
+
+
+def cmd_band(args):
+    """Lay down (or re-cut) a whole four-track metal jam in ONE command: two
+    double-tracked guitars, a locked bass, and drums — replacing whatever is on
+    those tracks. This is the smooth path: one line instead of clear+insert x4.
+    """
+    br = args.bridge_root
+    if not status_ok(br, quiet=True):
+        print("[band] REAPER is DOWN — relaunch it, nothing inserted.", file=sys.stderr)
+        return 1
+    seeds = [int(s) for s in args.seeds.split(",")] if args.seeds else [101, 202, 303]
+    rc_total, results = render_band(
+        br, guitar_l=args.guitar_l, guitar_r=args.guitar_r, bass=args.bass,
+        drums=args.drums, riff=args.riff, bars_file=args.bars_file, dsl=args.dsl,
+        map_name=args.map, drum_map=args.drum_map, seeds=seeds,
+        low_string=args.low_string, position=args.position, tempo=args.tempo,
+        replace=not args.no_replace)
+    for rc, msg in results:
+        # A leg that failed says so on stderr; the ones that landed stay on
+        # stdout, so a half-cut jam is still readable in a pipe.
+        print(msg, file=(sys.stderr if rc else sys.stdout))
+    print("[band] done." if not rc_total else "[band] finished with errors.")
+    return rc_total
+
+
+def cmd_riff(args):
+    """Read a guitar stem's transients into a proposed kick grid (David's step 1).
+
+    Reads the SAVED .rpp on disk, parses the named guitar track's audio item,
+    detects onsets, and prints the kick grid at 100/50/30% attack strength. It's
+    a PROPOSAL David corrects (the percentile is an attack-strength heuristic,
+    not true open-vs-muted) — transcribe the row you like into a groove DSL.
+    """
+    if not os.path.isfile(args.project):
+        print(f"[riff] ERROR: project not found: {args.project}", file=sys.stderr)
+        return 1
+    skill_dir = os.path.join(args.bridge_root, "skills", "drum-apparatus")
+    if not os.path.isdir(skill_dir):
+        print(f"[riff] ERROR: drum skill not found at {skill_dir}", file=sys.stderr)
+        return 1
+    cmd = [sys.executable, "-m", "drumgen.riff", args.project, args.track,
+           str(args.bars), str(args.start_bar)]
+    try:
+        r = subprocess.run(cmd, cwd=skill_dir, capture_output=True, text=True,
+                           timeout=300)
+    except subprocess.TimeoutExpired:
+        print("[riff] ERROR: onset analysis did not finish in 300s "
+              "(very long stem? trim it or pass fewer bars)", file=sys.stderr)
+        return 1
+    if r.stdout:
+        print(r.stdout.rstrip())
+    if r.returncode != 0:
+        print(r.stderr.rstrip() or "[riff] failed to read the project", file=sys.stderr)
+        return 1
+    print("\n[riff] Proposal — David corrects it. Transcribe a kick row into a DSL, "
+          "then: reaperd.py groove <dsl> --track <name>")
+    return 0
+
+
+def drum_profile_args(project, track, bars=None, start_bar=None,
+                      max_seconds=None, json_flag=False):
+    """Positional argv for drumgen.profile, WITHOUT the executable.
+
+    Shared by the CLI (cmd_profile) and the MCP server (tool_profile_track)
+    so the two argv builders cannot drift: drumgen takes these positionally,
+    in this order, and a change here must land in both callers at once.
+    is-not-None, not truthiness: --max-seconds 0 must reach drumgen and be
+    rejected there, not silently turn into "profile the whole item".
+    """
+    argv = ["-m", "drumgen.profile", project, track]
+    if bars is not None or start_bar or max_seconds is not None:
+        argv.append(str(bars if bars is not None else 0))  # 0 = whole item
+        if start_bar or max_seconds is not None:
+            argv.append(str(start_bar or 0))
+        if max_seconds is not None:
+            argv.append(str(max_seconds))
+    if json_flag:
+        argv.append("--json")
+    return argv
+
+
+def cmd_profile(args):
+    """Profile a guitar stem bar-by-bar (David's analyze step, before kicks).
+
+    Same reading model as riff: parses the SAVED .rpp on disk for the track's
+    audio item. Prints a per-bar feature table (density, decay, silence, band
+    balance, accent grid) plus suggested section boundaries and repeated-
+    section groups. The numbers are for the AGENT to label and David to
+    correct — profile never claims 'this is a breakdown' itself. Run it on
+    the DI track when there is one; distortion flattens the decay contrast
+    that separates open notes from palm mutes."""
+    if not os.path.isfile(args.project):
+        print(f"[profile] ERROR: project not found: {args.project}", file=sys.stderr)
+        return 1
+    skill_dir = os.path.join(args.bridge_root, "skills", "drum-apparatus")
+    if not os.path.isdir(skill_dir):
+        print(f"[profile] ERROR: drum skill not found at {skill_dir}", file=sys.stderr)
+        return 1
+    cmd = [sys.executable] + drum_profile_args(
+        args.project, args.track, bars=args.bars, start_bar=args.start_bar,
+        max_seconds=args.max_seconds, json_flag=args.json)
+    try:
+        r = subprocess.run(cmd, cwd=skill_dir, capture_output=True, text=True,
+                           timeout=600)
+    except subprocess.TimeoutExpired:
+        print("[profile] ERROR: analysis did not finish in 600s "
+              "(very long stem? pass --bars / --max-seconds)", file=sys.stderr)
+        return 1
+    if r.stdout:
+        print(r.stdout.rstrip())
+    if r.returncode != 0:
+        print(r.stderr.rstrip() or "[profile] failed to read the project",
+              file=sys.stderr)
+        return 1
+    if not args.json:
+        print("\n[profile] Numbers, not verdicts - label sections with David, "
+              "then build per-section: reaperd.py riff for kicks, groove to place.")
+    return 0
+
+
+def cmd_list_maps(args):
+    _skill_path(args.bridge_root)
+    try:
+        from drumgen.catalog import load_maps  # noqa: E402
+    except Exception as e:
+        print(f"error: could not load drum maps: {e}", file=sys.stderr)
+        return 1
+    for name in sorted(load_maps().keys()):
+        print(name)
+    return 0
+
+
+def humanize_take(br, *, track, item_index=None, amount=25, map_name=None,
+                  seed=20260827, follow_lead=False, example_through_bar=None,
+                  dry_run=False, sender=None):
+    """Humanize an existing drum take: dynamics + micro-timing, one command.
+
+    Reads the take, plans the pass with the shared taste model (drumgen.humanize,
+    which reuses the renderer's kick ceiling / snare band / hat curve / cymbal
+    boost), and writes it back through the bridge's index-addressed
+    apply_note_edits -- so stacked hits (flams, double-triggers) are humanized
+    too, not skipped.
+
+    Returns (rc, [lines], summary_or_None). `lines` is the human report the CLI
+    prints; `summary` is the plan's own summary dict, which is what the MCP tool
+    hands back. One implementation so the two callers cannot drift.
+    """
+    if sender is None:
+        def sender(cmd_type, payload, timeout_ms):
+            return send_type(cmd_type, payload, bridge_root=br,
+                             timeout_ms=timeout_ms, resolve=False, repair=False)
+    _skill_path(br)
+    try:
+        from drumgen.humanize import plan_humanize  # noqa: E402
+        from drumgen.catalog import load_maps       # noqa: E402
+        from drumgen import learn as drumlearn      # noqa: E402
+        from drumgen import goldenrule              # noqa: E402
+    except Exception as e:
+        return 1, [f"error: could not load humanize model: {e}"], None
+
+    lines = []
+    read_payload = {"target_track_name": track,
+                    "include_bars": bool(follow_lead),
+                    "include_note_names": True, "max_notes": 100000}
+    if item_index is not None:
+        read_payload["item_index"] = item_index
+    res = sender("get_midi_notes", read_payload, 20000)
+    if not res.get("ok"):
+        return 1, [f"[humanize] read FAILED: {res.get('error')}"], None
+    data = res.get("data", {})
+    notes = data.get("notes", [])
+    if not notes:
+        return 1, ["[humanize] the take has no notes; nothing to do."], None
+    if data.get("truncated"):
+        return 1, [f"[humanize] refusing: take has {data.get('note_count')} notes, "
+                   "more than the read cap; raise max_notes."], None
+    ppq = data.get("ppq_per_quarter", 960)
+    note_names = data.get("note_names") or {}
+
+    kit_map = None
+    if map_name:
+        maps = load_maps()
+        if map_name not in maps:
+            return 1, [f"[humanize] unknown map {map_name!r}; "
+                       f"try: {', '.join(sorted(maps))}"], None
+        kit_map = maps[map_name]
+
+    if follow_lead:
+        # Follow David's lead: the hand he already put on this take is the spec,
+        # not the shared taste model. Learn it from the humanized head of the
+        # take, then carry it across the flat remainder.
+        bar_ticks = ppq * 4
+        if example_through_bar is not None:
+            boundary = example_through_bar * bar_ticks   # bars are 1-based
+            done_bars = example_through_bar
+        else:
+            boundary, done_bars = drumlearn.find_example_boundary(notes, bar_ticks)
+        if boundary is None:
+            return 1, ["[humanize] the whole take already varies -- nothing flat "
+                       "left to follow into. Drop follow_lead to re-humanize it."], None
+        if not done_bars:
+            return 1, ["[humanize] no humanized example found: bar 1 is already "
+                       "flat. Humanize a section by hand first, or drop "
+                       "follow_lead."], None
+        profile = drumlearn.learn_profile(notes, ppq, kit_map=kit_map,
+                                          note_names=note_names,
+                                          through_ppq=boundary,
+                                          bar_ticks=bar_ticks)
+        plan = drumlearn.plan_follow(notes, ppq, profile, from_ppq=boundary,
+                                     kit_map=kit_map, note_names=note_names,
+                                     seed=seed)
+        s = plan["summary"]
+        lines.append(f"[humanize] following your lead from bars 1-{done_bars} "
+                     f"({s['example_notes']} notes, {s['learned_slots']} learned "
+                     f"slots, level {s['shift_from_default']:+d} vs the shared model)")
+        lines.append(f"[humanize] carried across {s['followed_notes']} notes -> "
+                     f"{s['velocity_edits']} velocity edits, {s['fills_shaped']} "
+                     "fills shaped")
+        lines.append(f"[humanize] golden rule: {s['golden_rule_violations']} "
+                     "violation(s) in the plan"
+                     + (f" ({s['golden_rule_remaining_in_example']} inside your own "
+                        "bars, left alone)"
+                        if s['golden_rule_remaining_in_example'] else ""))
+        if s["guessed"]:
+            lines.append(f"[humanize] NOT in your example, extrapolated -- give "
+                         f"these a listen: {', '.join(s['guessed'])}")
+    else:
+        plan = plan_humanize(notes, ppq, kit_map=kit_map, note_names=note_names,
+                             map_name=map_name, amount=amount, seed=seed)
+        s = plan["summary"]
+        lines.append(
+            f"[humanize] {s['notes']} notes | amount {s['amount']} seed {s['seed']} | "
+            f"{s['velocity_edits']} vel, {s['position_edits']} moved "
+            f"(mean {s['mean_move_ticks']}t, max {s['max_move_ticks']}t) | "
+            f"{s['fills']} fills shaped ({s['fill_notes']} notes)")
+        if s["unclassified"]:
+            lines.append(f"[humanize] {s['unclassified']} note(s) unclassified "
+                         "(neutral band); pass a map for exact role bands.")
+    if dry_run:
+        lines.append("[humanize] dry run: no write sent.")
+        return 0, lines, s
+
+    write_payload = {"target_track_name": track, "edits": plan["edits"],
+                     "note_count": len(notes), "allow_partial": False}
+    if item_index is not None:
+        write_payload["item_index"] = item_index
+    wres = sender("apply_note_edits", write_payload, 30000)
+    if not wres.get("ok"):
+        return 1, lines + [f"[humanize] write FAILED: {wres.get('error')}"], s
+    wd = wres.get("data", {})
+    lines.append(f"[humanize] applied {wd.get('applied')} / confirmed "
+                 f"{wd.get('confirmed')} | end-trim (advisory) "
+                 f"{wd.get('end_advisory_drift')}")
+    lines.append("[humanize] done. Ctrl+S in REAPER to save; one Ctrl+Z reverts "
+                 "the pass.")
+    return _exit_for(wres), lines, s
+
+
+def cmd_humanize(args):
+    rc, lines, summary = humanize_take(
+        args.bridge_root, track=args.track, item_index=args.item_index,
+        amount=args.amount, map_name=args.map, seed=args.seed,
+        follow_lead=args.follow_lead,
+        example_through_bar=args.example_through_bar, dry_run=args.dry_run)
+    # Progress goes to stdout, the failing line to stderr: the CLI's contract
+    # is unchanged, only where the strings are built moved.
+    for line in lines[:-1]:
+        print(line)
+    if lines:
+        print(lines[-1], file=(sys.stderr if rc else sys.stdout))
+    if args.dry_run and summary is not None:
+        print(json.dumps(summary, indent=2))
+    return rc
+
+
+def _overlay_dir(bridge_root):
+    # "maps" is a sibling of catalog/, under skills/drum-apparatus/
+    return os.path.join(bridge_root, "skills", "drum-apparatus", "maps")
+
+
+def _skill_path(bridge_root):
+    """Ensure skills/drum-apparatus is importable and return its path."""
+    p = os.path.join(bridge_root, "skills", "drum-apparatus")
+    if p not in sys.path:
+        sys.path.insert(0, p)
+    return p
+
+
+def cmd_discover_map(args):
+    br = args.bridge_root
+    _skill_path(br)
+    try:
+        from drumgen.mapdetect import match_roles, format_report  # noqa: E402
+    except Exception as e:
+        print(f"error: could not load mapdetect: {e}", file=sys.stderr)
+        return 1
+
+    channels = [int(c) for c in args.channels.split(",") if c.strip() != ""]
+    payload = {"target_track_name": args.track, "channels": channels,
+               "max_pitch": args.max_pitch}
+    if args.guid:
+        payload = {"target_track_guid": args.guid, "channels": channels,
+                   "max_pitch": args.max_pitch}
+    res = send_type("discover_drum_map", payload, bridge_root=br,
+                    timeout_ms=15000, resolve=False, repair=False)
+    if not res.get("ok"):
+        print(f"[discover-map] FAILED: {res.get('error')}", file=sys.stderr)
+        return 1
+    data = res.get("data", {})
+    notes_raw = data.get("notes", {})
+    # flatten {"36": {name, channel}} -> {36: name} for the matcher
+    notes = {}
+    for p, info in notes_raw.items():
+        try:
+            notes[int(p)] = info.get("name") if isinstance(info, dict) else info
+        except (TypeError, ValueError):
+            continue
+    print("[discover-map] track: %s  fx: %s" % (
+        data.get("track", {}).get("name", "?"),
+        ", ".join(data.get("fx", [])) or "(none)"))
+    if not data.get("has_note_names"):
+        print("[discover-map] No MIDI note names on this track.")
+        print("[discover-map] The drum library did not install a .midnam, so there")
+        print("[discover-map] is nothing to auto-discover. Options:")
+        print("[discover-map]   - load the kit's .midnam into REAPER (track piano roll ->")
+        print("[discover-map]     Note names -> load), then re-run; or")
+        print("[discover-map]   - build the map by hand: reaperd.py add-map <name>")
+        print("[discover-map]     (see reaperd.py add-map -h)")
+        return 2
+
+    map_dict, report = match_roles(notes)
+    print(format_report(notes, report, map_dict))
+    if args.save:
+        _save_overlay_map(br, args.save, map_dict)
+        print("")
+        print(f"[discover-map] Saved map '{args.save}' to the user overlay.")
+        print(f"[discover-map] Use it with: @map {args.save}  (or --map {args.save})")
+    elif report["complete"]:
+        print("")
+        print("[discover-map] Looks good. Save it with --save <name> to use in the DSL.")
+    return 0 if report["complete"] else 2
+
+
+def _save_overlay_map(bridge_root, name, role_map):
+    odir = _overlay_dir(bridge_root)
+    os.makedirs(odir, exist_ok=True)
+    path = os.path.join(odir, name + ".json")
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(json.dumps(role_map, separators=(",", ":")))
+    os.replace(tmp, path)
+    return path
+
+
+def cmd_add_map(args):
+    br = args.bridge_root
+    # Source: a JSON file, or inline roles on the command line.
+    role_map = None
+    if args.file:
+        if not os.path.isfile(args.file):
+            print(f"error: map file not found: {args.file}", file=sys.stderr)
+            return 1
+        with open(args.file, "r", encoding="utf-8") as f:
+            try:
+                role_map = json.load(f)
+            except Exception as e:
+                print(f"error: could not parse {args.file}: {e}", file=sys.stderr)
+                return 1
+    elif args.roles:
+        try:
+            role_map = json.loads(args.roles)
+        except Exception as e:
+            print(f"error: --roles is not valid JSON: {e}", file=sys.stderr)
+            return 1
+    elif not sys.stdin.isatty():
+        text = sys.stdin.read().strip()
+        if text:
+            try:
+                role_map = json.loads(text)
+            except Exception as e:
+                print(f"error: stdin is not valid JSON: {e}", file=sys.stderr)
+                return 1
+    if not isinstance(role_map, dict):
+        print("error: no map provided. Use --file, --roles, or pipe JSON on stdin.",
+              file=sys.stderr)
+        return 1
+    # Accept either {name: {role:pitch}} or bare {role:pitch}.
+    if len(role_map) == 1 and isinstance(next(iter(role_map.values())), dict):
+        name, role_map = next(iter(role_map.items()))
+    else:
+        name = args.name
+    if not name:
+        print("error: map name required (positional arg or a single-key file).",
+              file=sys.stderr)
+        return 1
+    # Validate roles are integers; warn on unknown roles.
+    _skill_path(br)
+    try:
+        from drumgen.catalog import ROLE_KEYS  # noqa: E402
+    except Exception:
+        ROLE_KEYS = []
+    known = set(ROLE_KEYS)
+    cleaned = {}
+    for k, v in role_map.items():
+        try:
+            pitch = int(v)
+        except (TypeError, ValueError):
+            print(f"warning: skipping non-integer role {k!r} = {v!r}", file=sys.stderr)
+        else:
+            if 0 <= pitch <= 127:
+                cleaned[k] = pitch
+            else:
+                # An out-of-range pitch would corrupt the SMF at render time.
+                print(f"warning: skipping role {k!r} = {pitch} "
+                      f"(MIDI pitch must be 0-127)", file=sys.stderr)
+        if known and k not in known:
+            print(f"warning: {k!r} is not a known groovekit role", file=sys.stderr)
+    path = _save_overlay_map(br, name, cleaned)
+    print(f"[add-map] Saved {len(cleaned)} roles as '{name}' -> {path}")
+    print(f"[add-map] Use it with: @map {name}  (or reaperd.py groove ... --map {name})")
+    return 0
+
+
+def cmd_remove_map(args):
+    odir = _overlay_dir(args.bridge_root)
+    path = os.path.join(odir, args.name + ".json")
+    if not os.path.isfile(path):
+        print(f"error: no user map named {args.name!r} in {odir}", file=sys.stderr)
+        return 1
+    os.replace(path, path + ".trash")
+    try:
+        os.unlink(path + ".trash")
+    except OSError:
+        pass
+    print(f"[remove-map] Removed '{args.name}'.")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# argparse
+# ---------------------------------------------------------------------------
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="reaperd",
+        description="Cross-platform CLI for the Reaper Daemon REAPER agent bridge.",
+    )
+    p.add_argument("--bridge-root", default=BRIDGE_ROOT,
+                   help=f"bridge root (default: {BRIDGE_ROOT}; env REAPER_DAEMON_ROOT)")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    s = sub.add_parser("send", help="send a command JSON file")
+    s.add_argument("file", help="path to a command JSON file")
+    s.add_argument("--wait", action="store_true", help="poll for the reply")
+    s.add_argument("--timeout", type=int, default=30000, help="reply timeout in ms")
+    s.set_defaults(func=cmd_send)
+
+    s = sub.add_parser("cmd", help="send by <type> + <payload-json>")
+    s.add_argument("type", help="command type (get_context, add_fx, ...)")
+    s.add_argument("payload", help="payload as a JSON string")
+    # default None, not 10000: that lets render_timeout_ms tell "the user asked
+    # for 10s" apart from "nobody said", so capture/render can widen their own
+    # budget without overriding an explicit --timeout.
+    s.add_argument("--timeout", type=int, default=None,
+                   help="reply timeout in ms (default 10000; capture_track_audio "
+                        "and render scale with the capture length)")
+    s.set_defaults(func=cmd_cmd)
+
+    s = sub.add_parser("status", help="bridge liveness check")
+    s.add_argument("--quiet", action="store_true", help="exit code only")
+    s.set_defaults(func=cmd_status)
+
+    s = sub.add_parser("measure",
+                       help="capture one track once and print measured audio metrics")
+    s.add_argument("track", help="track name or 'master'")
+    _add_verify_options(s)
+    s.set_defaults(func=cmd_measure)
+
+    s = sub.add_parser(
+        "verify",
+        help="measure -> mutate -> measure: run a command with measured proof",
+        description="Capture the track, run the mutation, capture again with "
+                    "the SAME bounds, and report measured deltas. Exit codes: "
+                    "0 VERIFIED (clean comparable captures, deltas reported), "
+                    "1 REFUSED (the mutation was never sent: pre-capture "
+                    "failed or was silent, so nothing was mutated), "
+                    "2 UNVERIFIED (the mutation was sent but not verified: "
+                    "applied, partial, rejected by the bridge, or unknown; "
+                    "the project may have changed; NOT rolled back, one "
+                    "Ctrl/Cmd+Z reverts it; do not retry blindly).")
+    s.add_argument("track", help="track name or 'master'")
+    _add_verify_options(s)
+    s.add_argument("mutation", nargs=argparse.REMAINDER,
+                   help="-- <type> '<payload-json>' (mirrors `cmd`; options "
+                        "work before or after the track name)")
+    s.set_defaults(func=cmd_verify)
+
+    s = sub.add_parser("fxload", help="resolve an installed plugin name and add it")
+    s.add_argument("query", help="plugin name query (fuzzy)")
+    s.add_argument("track", nargs="?", default="master",
+                   help="track name or 'master' (default: master)")
+    s.set_defaults(func=cmd_fxload)
+
+    s = sub.add_parser("save-chain",
+                       help="save one track's live FX chain (state included) as a .RfxChain")
+    s.add_argument("track", help="track name or 'master'")
+    s.add_argument("--name", help="chain name under REAPER's FXChains (default: track slug)")
+    s.add_argument("--overwrite", action="store_true", help="replace an existing chain file")
+    s.set_defaults(func=cmd_save_chain)
+
+    s = sub.add_parser("snapshot-chains",
+                       help="save every track's live FX chain (master included) as .RfxChain files")
+    s.add_argument("--prefix", default="", help="prepended to each chain name, e.g. 'disgrace-'")
+    s.add_argument("--overwrite", action="store_true", help="replace existing chain files")
+    s.add_argument("--dry-run", action="store_true", help="list what would be saved, save nothing")
+    s.set_defaults(func=cmd_snapshot_chains)
+
+    s = sub.add_parser("setparam", help="set any plugin parameter, with verify")
+    s.add_argument("track", help="track name or 'master'")
+    s.add_argument("fx", help="FX substring or #index")
+    s.add_argument("param", help="param substring or #index")
+    s.add_argument("value", help='display value ("80 Hz") or norm=0..1')
+    s.set_defaults(func=cmd_setparam)
+
+    s = sub.add_parser("eq", help="set one EQ band (freq Hz, gain dB, [Q])")
+    s.add_argument("track", help="track name")
+    s.add_argument("fx", help="FX substring or #index")
+    s.add_argument("band", type=int, help="band number")
+    s.add_argument("freq", help="frequency in Hz")
+    s.add_argument("gain", help="gain in dB")
+    s.add_argument("q", nargs="?", default=None, help="Q (optional)")
+    s.set_defaults(func=cmd_eq)
+
+    s = sub.add_parser("groove", help="render a DSL drum beat and insert it")
+    s.add_argument("dsl", help="path to a DSL file")
+    s.add_argument("--track", default=None, help="track name (default: selected track)")
+    s.add_argument("--position", type=float, default=None,
+                   help="time in seconds (default: edit cursor)")
+    s.add_argument("--tempo", type=int, default=None, help="project tempo override")
+    s.add_argument("--seed", type=int, default=None, help="RNG seed")
+    s.add_argument("--map", default=None, help="drum-kit map (default: GM Standard)")
+    s.add_argument("--replace", action="store_true",
+                   help="clear the track from --position before inserting")
+    s.set_defaults(func=cmd_groove)
+
+    s = sub.add_parser("jam", help="render a DSL beat from stdin onto the selected track")
+    s.set_defaults(func=cmd_jam)
+
+    s = sub.add_parser("band",
+                       help="lay down / re-cut a whole 4-track jam in one command")
+    s.add_argument("--guitar-l", default="argent-l", help="left guitar track")
+    s.add_argument("--guitar-r", default="argent-r", help="right guitar track")
+    s.add_argument("--bass", default="nolly-bass-library", help="bass track")
+    s.add_argument("--drums", default="rs-drums-monarch", help="drum track")
+    s.add_argument("--riff", default="demo", help="built-in riff: demo | probe")
+    s.add_argument("--bars-file", default=None,
+                   help="custom guitar riff: text file, one bar per line")
+    s.add_argument("--dsl", default=None,
+                   help="drum DSL (default: bundled examples/jam-e.dsl)")
+    s.add_argument("--map", default="argent_e", help="guitar tuning map")
+    s.add_argument("--drum-map", default="RS Monarch", help="drum-kit map")
+    s.add_argument("--seeds", default="101,202,303",
+                   help="comma seeds for guitar-l, guitar-r, bass")
+    s.add_argument("--low-string", type=int, default=None,
+                   help="override the guitar low-string MIDI note")
+    s.add_argument("--position", type=float, default=0.0,
+                   help="time in seconds (default: 0 = bar 1)")
+    s.add_argument("--tempo", type=int, default=None, help="project tempo override")
+    s.add_argument("--no-replace", action="store_true",
+                   help="append instead of replacing the tracks (default: replace)")
+    s.set_defaults(func=cmd_band)
+
+    s = sub.add_parser("shred",
+                       help="render a humanized guitar/bass riff and insert it")
+    s.add_argument("--track", required=True, help="target track name")
+    s.add_argument("--part", choices=["guitar", "bass"], default="guitar")
+    s.add_argument("--riff", default="demo",
+                   help="built-in riff: demo | probe (ignored with --bars-file)")
+    s.add_argument("--bars-file", default=None,
+                   help="custom riff: text file, one 16-char bar per line")
+    s.add_argument("--map", default="argent_e", help="tuning map (guitar part)")
+    s.add_argument("--seed", type=int, default=0x5152, help="RNG seed")
+    s.add_argument("--low-string", type=int, default=None,
+                   help="override the map's low-string MIDI note (probe result)")
+    s.add_argument("--position", type=float, default=None,
+                   help="time in seconds (default: edit cursor)")
+    s.add_argument("--tempo", type=int, default=None, help="project tempo override")
+    s.add_argument("--replace", action="store_true",
+                   help="clear the track from --position before inserting")
+    s.set_defaults(func=cmd_shred)
+
+    s = sub.add_parser("riff",
+                       help="read a guitar stem's transients into a proposed kick grid")
+    s.add_argument("project", help="path to the saved .rpp project file")
+    s.add_argument("track", help="name of the guitar track to read")
+    s.add_argument("--bars", type=int, default=4, help="bars to read (default 4)")
+    s.add_argument("--start-bar", type=int, default=0,
+                   help="first bar to read, 0-indexed (default 0)")
+    s.set_defaults(func=cmd_riff)
+
+    s = sub.add_parser("profile",
+                       help="profile a guitar stem bar-by-bar: technique + "
+                            "section features for groove planning")
+    s.add_argument("project", help="path to the saved .rpp project file")
+    s.add_argument("track", help="name of the guitar track to profile "
+                                 "(prefer the DI over the amped stem)")
+    s.add_argument("--bars", type=int, default=None,
+                   help="bars to profile (default: the whole first item)")
+    s.add_argument("--start-bar", type=int, default=0,
+                   help="first bar to profile, 0-indexed (default 0)")
+    s.add_argument("--max-seconds", type=float, default=None,
+                   help="analyze only N seconds of material (measured from "
+                        "--start-bar, so the flags compose)")
+    s.add_argument("--json", action="store_true",
+                   help="emit the raw profile JSON instead of the table")
+    s.set_defaults(func=cmd_profile)
+
+    s = sub.add_parser("humanize",
+                       help="add dynamics + micro-timing to an existing drum take")
+    s.add_argument("--track", required=True, help="drum track name")
+    s.add_argument("--item-index", type=int, default=None,
+                   help="which item on the track (default: the only item)")
+    s.add_argument("--amount", type=int, default=25,
+                   help="0-100: random spread + timing looseness (default 25); "
+                        "the dynamic contour is always applied")
+    s.add_argument("--map", default=None,
+                   help="drum-kit map for exact per-role velocity bands "
+                        "(default: infer roles from the track's MIDI note names)")
+    s.add_argument("--seed", type=int, default=20260827, help="RNG seed (reproducible)")
+    s.add_argument("--follow-lead", action="store_true",
+                   help="learn the velocity hand from the part you already "
+                        "humanized by hand and carry it across the rest, instead "
+                        "of applying the shared taste model")
+    s.add_argument("--example-through-bar", type=int, default=None,
+                   help="with --follow-lead: the last bar you humanized "
+                        "(default: auto-detect the first flat bar)")
+    s.add_argument("--dry-run", action="store_true",
+                   help="plan and print the summary without writing")
+    s.set_defaults(func=cmd_humanize)
+
+    s = sub.add_parser("list-maps", help="print available drum-kit maps")
+    s.set_defaults(func=cmd_list_maps)
+
+    s = sub.add_parser("discover-map",
+                       help="probe a drum track's MIDI note names and propose a kit map")
+    s.add_argument("track", help="track name (or use --guid)")
+    s.add_argument("--guid", default=None, help="track GUID instead of name")
+    s.add_argument("--channels", default="0",
+                   help="comma-separated MIDI channels to scan (default: 0)")
+    s.add_argument("--max-pitch", type=int, default=127,
+                   help="highest MIDI pitch to probe (default: 127)")
+    s.add_argument("--save", default=None,
+                   help="save the proposed map to the user overlay under this name")
+    s.set_defaults(func=cmd_discover_map)
+
+    s = sub.add_parser("add-map", help="save a drum-kit map to the user overlay")
+    s.add_argument("name", nargs="?", default=None,
+                   help="map name (required unless the JSON file is single-key)")
+    s.add_argument("--file", default=None, help="path to a map JSON file")
+    s.add_argument("--roles", default=None,
+                   help='inline JSON roles, e.g. \'{"KICK_R":36,"SNARE":38}\'')
+    s.set_defaults(func=cmd_add_map)
+
+    s = sub.add_parser("remove-map", help="remove a user-overlay drum-kit map")
+    s.add_argument("name", help="map name to remove")
+    s.set_defaults(func=cmd_remove_map)
+
+    s = sub.add_parser("recipe", help="capture, compare or rebuild a mix setup")
+    s.add_argument("action", choices=("capture", "diff", "rebuild"))
+    s.add_argument("path", help="local recipe JSON file")
+    s.add_argument("--dry-run", action="store_true", help="preview rebuild without creating a tab")
+    s.set_defaults(func=cmd_recipe)
+    from drum_transcription import add_parser as add_transcription_parser
+    add_transcription_parser(sub)
+    from drum_workshop import add_parser as add_workshop_parser
+    add_workshop_parser(sub)
+    return p
+
+
+def cmd_recipe(args):
+    from mix_recipes import run
+    try:
+        result = run(args.action, args.path,
+                     lambda kind, payload: send_type(kind, payload, bridge_root=args.bridge_root,
+                                                     timeout_ms=120000, verbose=False), args.dry_run)
+        print(json.dumps(result, indent=2))
+        if not result.get("ok"):
+            return 1
+        data = result.get("data", {})
+        return 2 if data.get("matches") is False or data.get("verified") is False else 0
+    except (ValueError, OSError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}))
+        return 1
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    if getattr(args, "bridge_root", None):
+        args.bridge_root = os.path.abspath(os.path.expanduser(args.bridge_root))
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,31 @@
+desc:RapReaper Ducks (volume dips drawn by RapReaper)
+//author:RapReaper
+//tags:utility gain
+// RapReaper's duck_section draws dips in this plug-in's one control as a parameter envelope. The control runs
+// from 0 to 1 on purpose: REAPER applies an FX parameter envelope in the control's own units, and the bridge
+// RapReaper talks through only ever writes envelope values between 0 and 1. (A dB slider, such as the stock
+// Volume/Pan Smoother's, would read those values as dB, so a dip drawn as 0.83 would become +0.83 dB.)
+// 1 = full level (0 dB), 0 = -40 dB; in between, the dB go down in a straight line. A few milliseconds of
+// smoothing take the steps out of block-rate automation; the envelope's own fades do the rest.
+
+slider1:1<0,1,0.0001>Level (0 = -40 dB, 1 = full)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+MAX_DIP_DB = 40;
+g = 1;                                   // the gain applied right now
+target = 1;
+coef = 1 - exp(-1 / (0.002 * srate));    // about 2 ms toward the target
+
+@slider
+level = min(max(slider1, 0), 1);
+target = 10 ^ (-MAX_DIP_DB * (1 - level) / 20);
+
+@sample
+g += (target - g) * coef;
+spl0 *= g;
+spl1 *= g;

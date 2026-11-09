@@ -1,0 +1,12 @@
+msvcp140.dll, msvcp140_1.dll, vcruntime140.dll and vcruntime140_1.dll are
+unmodified Microsoft Visual C++ runtime files (version 14.40.33728.0),
+Copyright (c) Microsoft Corporation, each carrying Microsoft's digital
+signature. They were taken from the package
+Microsoft.VCLibs.140.00.UWPDesktop_14.0.33728.0_x64.appx inside
+DesktopAppInstaller_Dependencies.zip, published by Microsoft with
+https://github.com/microsoft/winget-cli/releases (v1.29.380).
+
+They are included only because onnxruntime.dll needs them. They remain
+subject to Microsoft's licence terms for the Visual C++ runtime. You may
+delete them and install the official "Microsoft Visual C++ Redistributable"
+(2015-2022, x64) instead; the program then uses the installed copy.

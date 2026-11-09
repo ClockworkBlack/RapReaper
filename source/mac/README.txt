@@ -1,0 +1,340 @@
+RapReaper 1.4.6 - mix rap vocals in REAPER by talking to Claude (Mac)
+===================================================================
+
+What this folder is
+-------------------
+RapReaper connects the Claude desktop app to REAPER on this computer. You type what you
+want ("clean up my lead vocal", "a bit brighter", "make it loud enough for Spotify",
+"line the new beat up with the old one", "what key is this beat in"); Claude sets REAPER's
+own plug-ins in real units, measures the audio before and after, and tells you what
+changed. RapReaper and your audio stay on this computer. (Claude itself is an online
+service: the text of the chat goes to Anthropic, your audio does not.)
+
+Any audio interface or microphone works: Focusrite, PreSonus, Universal Audio, MOTU,
+Audient, Behringer, Steinberg, a USB microphone, or none at all. RapReaper works on what
+REAPER has recorded, never on the interface itself. Setting up your microphone and
+interface in REAPER, step by step for any brand, is in "AUDIO INTERFACE SETUP.txt" in
+this folder. The full guide is "RapReaper Guide (Mac).pdf" in this folder; how Claude
+works with you is in kit/PLAYBOOK.md. There is a Windows version of RapReaper too (its
+own zip, with the same tools).
+
+Before you install RapReaper (all free to install)
+-----------------------------------------------
+  1. REAPER            https://www.reaper.fm/download.php      (the macOS download for your
+                       Mac: Apple Silicon or Intel; start it once, then quit it)
+  2. SWS extension     through ReaPack, REAPER's package installer:
+                       a. From ReaPack's official site https://reapack.com download the file
+                          for your Mac: reaper_reapack-arm64.dylib (Apple Silicon: M1, M2,
+                          M3, M4) or reaper_reapack-x86_64.dylib (Intel).
+                       b. In REAPER: Options > Show REAPER resource path in finder; put the
+                          file in the UserPlugins folder there; quit and start REAPER. If
+                          macOS says the file cannot be opened, allow it once: System
+                          Settings > Privacy & Security > "Allow Anyway", then start REAPER
+                          again (this is ReaPack's own documented step).
+                       c. Extensions > ReaPack > Browse packages, type SWS, right-click
+                          "SWS/S&M extension" > Install, Apply, restart REAPER.
+  3. Python            https://www.python.org/downloads/macos/
+                       Take the "macOS 64-bit universal2 installer" of the current Python 3
+                       (3.12 or newer) and click through it with the standard choices. The
+                       Python that comes with macOS's developer tools is too old and is not
+                       used. Homebrew's Python (brew install python) works too.
+  4. Claude Desktop    https://claude.com/download             (sign in once)
+  5. Your audio interface or USB microphone, plugged in. On a Mac almost all of them need
+     no driver (they are "class compliant"); the maker's app (Focusrite Control, Universal
+     Control ...) is optional. Step by step for any brand: "AUDIO INTERFACE SETUP.txt".
+
+Install
+-------
+  1. Put this whole folder in your home folder (the one with your name, next to Desktop
+     and Documents), so that it ends up at
+         /Users/<your name>/RapReaper        (in Finder: Go > Home, then drag it there)
+     Not in Downloads, Desktop or Documents (macOS asks each program for permission to use
+     those, and a refused one fails silently), not in iCloud Drive, Dropbox or Google Drive.
+  2. Double-click   Install RapReaper.command   and read what it prints in the Terminal
+     window. If it lists things "TO DO", do them and run it again. It is safe to run as
+     often as you like.
+     The first time, macOS may say the file "cannot be opened" because it came from the
+     internet. Then: System Settings > Privacy & Security, scroll down, click "Open Anyway",
+     and double-click it again. (Or: open Terminal, type  bash  and a space, drag the file
+     into the window, press Return.) After this first run, every RapReaper .command file
+     opens by double-click.
+  3. Quit Claude completely (Claude menu > Quit Claude, or Cmd+Q), open it again.
+  4. Start REAPER, open a project.
+  5. In Claude type:   Run the RapReaper self-test
+     Run it again once your first recording is in a project: it then also checks, on your
+     REAPER, that one track is measured on its own and that measurements follow the fader.
+
+The installer needs no administrator password. It makes RapReaper's own small Python
+environment inside this folder (kit/venv) and puts NumPy and SciPy there, plus two optional
+packages when they can be fetched (lameenc for MP3 copies of exports, ONNX Runtime for
+taking the voice out of a song); the Mac's own Python is left exactly as it is. Outside
+this folder it changes two files: REAPER's startup script (~/Library/Application
+Support/REAPER/Scripts/__startup.lua: two short marked blocks, one starts the bridge, one
+notes the time REAPER was started and starts RapReaper's own small helper for clip edits)
+and Claude's settings file (~/Library/Application Support/Claude/claude_desktop_config.json:
+one "rapreaper" entry). It keeps a dated copy of each file before changing it, and
+Uninstall RapReaper.command takes the changes out again. One more thing it may change, with
+REAPER closed: if REAPER's preference "Set media items offline when application is not
+active" is on, the installer switches it off in reaper.ini (copy kept), because with it on
+REAPER unloads the audio whenever Claude's window is in front and every measurement comes
+back silent. With REAPER open, the self-test switches it off instead.
+
+Updating
+--------
+  Download the new RapReaper Mac zip into Downloads and double-click Update RapReaper.command.
+  It checks the zip against the checksums it carries, replaces the program files, keeps your
+  chains, settings, mix log, references, exports, snapshots, model files and the optional
+  programs, puts the replaced files in updates/, and runs the new version's installer. Then
+  quit REAPER and start it again (the helper inside REAPER only loads at start; status
+  reminds you until you do). (Terminal asks once for permission to read Downloads: allow it.)
+
+What changed in 1.4.6 (9 November 2026)
+---------------------------------------
+  The Vocal Remover now runs on Intel Macs too: download RapReaper-1.4.6-Mac-Intel.zip on an
+  Intel Mac (RapReaper-1.4.6-Mac.zip stays the one for Macs with an Apple chip; the installer
+  and Update tell you if you have the other one). It uses ONNX Runtime 1.23.2, the last version
+  Microsoft built for Intel Macs, and needs macOS 13 or newer.
+  RapReaper's own files are now under the MIT licence (LICENSE.txt). The Vocal Remover's model
+  can be built by anyone: "Get Vocal Remover Model.command" downloads its two source files from
+  their authors (checked by checksum) and the installer builds the model from them in about a
+  minute, byte for byte the published file. Model pieces still work as before.
+  The Vocal Remover is 2.0.3. Details in kit/CHANGES-1.4.md ("1.4.6").
+  The helper inside REAPER is 1.4.6 (one version line).
+
+What changed in 1.4.5 (9 November 2026)
+---------------------------------------
+  The Vocal Remover is rebuilt with Go 1.27.3, the current release of the language it is written
+  in. It was built with Go 1.24.7, which no longer gets fixes and has had security fixes since,
+  in the parts of Go that serve the Vocal Remover's window. Its own code is unchanged; it is now
+  version 2.0.2. Nothing else works differently: your chains, settings, projects and model files
+  stay as they are. Both guides (PDF) are rebuilt for this version (the Windows one said 1.4.1, the
+  Mac one 1.4.2); the Mac guide now writes the Ducks effect's folder the Mac way and says that the
+  Vocal Remover needs macOS 14 or newer. Details in kit/CHANGES-1.4.md ("1.4.5").
+  The helper inside REAPER is 1.4.5 (one version line).
+
+What changed in 1.4.4 (11 October 2026)
+---------------------------------------
+  Ducks that did not duck. A dip drawn with duck_section (a breath, a loud word, the beat under
+  a line) came out as a small PLUS of up to 0.8 dB instead: REAPER applies an envelope in the
+  control's own units, and the stock Volume/Pan Smoother that served as the "Ducks" plug-in has
+  a dB slider, so the 0..1 values RapReaper wrote played as dB. The Ducks plug-in is now
+  RapReaper's own small effect, "JS: RapReaper Ducks" (kit/effects/RapReaper/ducks.jsfx), whose
+  one control runs 0..1; the installer copies it into REAPER's Effects folder, so after this
+  update run Install (Update does that for you) and restart REAPER once. A track that still has
+  the old plug-in gets it replaced, and its dips drawn again at their real depth, the first
+  time duck_section is used on it; the answer says so. Details in kit/CHANGES-1.4.md ("1.4.4").
+  The helper inside REAPER is 1.4.4 (one version line).
+
+What changed in 1.4.3 (10 October 2026)
+---------------------------------------
+  A heavy project (dozens of pitch plug-ins: ReaTune on every vocal, ReaPitch on every
+  double) that rendered at twice real time was turned down with "REAPER renders too slowly
+  for measuring", even for a ten-second preview, because any render slower than a quarter
+  of real time was refused outright. Now only a real-time ("Online render") speed is refused
+  with that fix; a project that is merely slow is measured and exported in shorter stretches,
+  and a piece that is too long for one call says how long a piece fits and how to export the
+  whole song in REAPER. The helper inside REAPER is 1.4.3 (one version line; restart REAPER
+  once after updating).
+
+What changed in 1.4.2 (8 October 2026)
+---------------------------------------
+  Every problem met on 7 October, and its fix, is in kit/CHANGES-1.4.md ("1.4.2"); the security
+  and privacy ones in detail in SECURITY.txt (audit rounds 7 to 13). In short:
+  - Mixes for phones: the new phone_fixes tool measures the mix as a phone speaker plays it and
+    in mono, shows a plan (bass harmonics the phone can play, room for the words, wide effects a
+    little quieter, vocal and beat centred, limiter headroom), makes the moves when you say yes
+    and measures again. device_check gained two numbers (bass harmonics, harsh top), the
+    engineering cards a "phones" topic, the guide a chapter. 57 tools.
+  - Privacy, maximum level: track names no longer slip through in undo texts, send texts, the
+    solo list, the mix log, error texts, progress messages, restore points, chain notes or
+    capture file names; a real track called "MASTER" is never confused with the master bus; a
+    track RapReaper makes from another (a split piece, an effect track) never carries your
+    account name along.
+  - Working again: restore_clips with two edits in one second, level_match at the maximum
+    level, the doubler/reverb/delay on tracks with long names, labels accepted for an existing
+    effect track and for a remaster, auto-picked tracks never the master bus.
+  - Update keeps placeholder files only at the top of your own folders; the build refuses to
+    ship a package with the builder's own folder names in it.
+  The helper inside REAPER is 1.4.2: close REAPER and start it again after updating.
+
+What changed in 1.4.1 (7 October 2026)
+--------------------------------------
+  An independent audit of the 1.4.0 packages and the fixes it led to; SECURITY.txt has the list.
+  In short: no folder path, account name, computer name or e-mail address can reach Claude any more
+  (only file names), the Vocal Remover makes no internet connection on a Mac either, Update asks
+  before installing and refuses older versions or crafted zips, separate_song never overwrites or
+  takes another song's files, a cancelled command never runs later, and lowering the privacy level
+  is your own step (rapreaper_install.py --privacy). The helper inside REAPER is now 1.4.1: restart
+  REAPER once after updating.
+
+What changed in 1.4.0 (October 2026)
+------------------------------------
+  Everything that stopped us or cost effort so far, and what was done, is in kit/CHANGES-1.4.md.
+  In short:
+  - This Mac version (RapReaper-1.4.5-Mac.zip), with the same tools as the Windows one,
+    double-click .command files, its own README, interface setup and guide. One source tree,
+    two packages.
+  - Updating in place: Update RapReaper.command (above). Status says when REAPER still runs the
+    previous helper after an update.
+  - Projects: list_projects, open_project (by name, by recent number, by path in your own
+    folder, or a new empty project; in the current tab or a new one) and close_project. Both
+    show a plan first and need your yes; unsaved changes are never dropped unless you chose
+    that (save first, drop them, or keep the project open in its tab).
+  - fit_instrumental: slide a track into place by its music. A new instrumental, a longer or
+    trimmed version of the same beat, or a vocal recorded over the old beat: RapReaper lines
+    the two up by their attacks and then by the waveforms themselves, to the sample, moves the
+    clips as one undoable step and checks the result. Repeating music lists the other shifts
+    that fit; a longer intro that would start before 0 is trimmed off the clip (undoable, the
+    recording untouched). Or a plain move: "put the beat at 8 seconds".
+  - song_tempo_and_key: the beat's BPM (with the half/double-time reading), its key with the
+    confidence and the relative key, note values in milliseconds for delays and pre-delay, the
+    auto-tune settings, and whether the beat is tuned off A=440. learn_song_effects reads the
+    song's tempo by itself now.
+  - reference_card: the engineering numbers Claude works from, kept on this Mac (loudness
+    targets of the services, where things live in a rap vocal, compression and de-essing,
+    reverb and delay for rap, auto-tune and keys, the order of work, doubles and ad-libs, the
+    808 problem, recording, a glossary, and your phrases with the tool for each).
+  - remaster: mix and master a song made in another program here. Export its tracks (or
+    the finished mix) as audio files from Pro Tools, FL Studio, Ableton Live, Logic, Cubase,
+    Studio One, GarageBand or Audacity, copy them into kit/imports/<song name>, and ask Claude to
+    remaster that folder: every file goes on its own track, lined up from the same start (or by
+    the positions Pro Tools wrote into the files), and the usual pass follows. REAPER cannot
+    open another program's project file; when one is found, RapReaper gives the exact export
+    steps for that program instead.
+  - Names: the names of music files and of saved projects are given to Claude as they are, at
+    every privacy level, so Claude can list what is in the references or remaster folder and
+    call songs by name; never a folder or path, and never a file that is not music.
+  - The Vocal Remover 2.0 comes inside this folder (VocalRemover/) and Claude can use it:
+    "make an instrumental from <song>" (separate_song) separates a song in kit/references into
+    the music and the voice, as WAV files in kit/imports that add up to the song exactly, and
+    puts them on tracks when you ask. New default network (the Mel-Band Roformer "Kim FT2",
+    as accurate as the earlier BS-Roformer within 0.3 dB in well under half the time), the
+    graphics processor and Neural Engine through CoreML with a built-in test that switches it
+    on only when it works and is faster, FLAC and Ogg files, and "Two networks" for the most
+    accurate result. The Mac build runs on Apple Silicon (M1 and later) with macOS 14 or newer, and since 1.4.6 the
+    -Mac-Intel.zip on Intel Macs with macOS 13 or newer. The installer joins the model pieces from Downloads into
+    VocalRemover/models (or builds the model from the files "Get Vocal Remover Model.command" downloads), allows the
+    program for RapReaper and
+    offers the graphics test. Its own README.txt in VocalRemover/ explains every mode.
+  - A full disk is noticed before REAPER renders into it (status warns under 2 GB free).
+  - For whoever works on RapReaper next: build/build_release.py builds both zips; DEVELOPMENT.md
+    says how to test, build and update.
+  Earlier versions (1.1.1, 1.2.0, 1.3.0, 1.3.1, 1.3.2; Windows only until now): kit/CHANGES-older.md
+  and kit/CHANGES-1.3.md.
+
+What is in here
+---------------
+  RapReaper Guide (Mac).pdf  the full guide: set-up, first session, what to say, every tool in
+                          plain words, safety and privacy, troubleshooting
+  AUDIO INTERFACE SETUP.txt  setting up your microphone and interface in REAPER (any brand)
+  Install RapReaper.command    sets everything up (runs rapreaper_install.py)
+  Check RapReaper.command      shows what is and is not set up; changes nothing outside this folder
+  Update RapReaper.command     updates from a newer RapReaper zip in Downloads, keeping your files
+  Make Full Packages.command   makes RapReaper-<version>-Mac-full.zip (and -Windows-full.zip) from the
+                          zips and the model pieces in Downloads: one zip with the Vocal Remover's
+                          model inside, to unzip and install on another computer
+  Uninstall RapReaper.command  disconnects RapReaper from REAPER and Claude
+  Get ffmpeg and Transcriber.command   installs ffmpeg and whisper.cpp with Homebrew and fetches the
+                          speech model into kit/models (optional, one time), then offers the two Allow steps
+  Allow ffmpeg.command        lets RapReaper start your ffmpeg (optional; only for MP3/M4A copies of exports)
+  Allow Transcriber.command   lets RapReaper start your whisper.cpp (optional; only to write down a vocal's
+                          words on this Mac for vocal_clarity)
+  Allow Vocal Remover.command lets RapReaper start another copy of the Vocal Remover (the installer
+                          allows the one in this folder by itself)
+  VocalRemover/           the Vocal Remover 2.0: "Vocal Remover.command" starts its window;
+                          models/ holds the network files (joined from the downloaded pieces by the
+                          installer), Output/ its results, settings.json the graphics-processor
+                          choice; README.txt explains the modes; source/ is its complete source code
+  SECURITY.txt            what was reviewed for security and privacy, what was found and fixed
+  MANIFEST.sha256         the checksum of every shipped file (the updater checks a new zip with its own)
+  DEVELOPMENT.md          for whoever changes RapReaper: how to test, build and update
+  kit/rapreaper_server.py    the tool server Claude starts (57 tools)
+  kit/rapreaper_platform.py  what differs between Windows and macOS (folders, words), in one place
+  kit/rapreaper_music.py     tempo, key and alignment of recordings; the reference cards
+  kit/rapreaper_programs.py  the one door through which an allowed program (ffmpeg, whisper.cpp) is started
+  kit/rapreaper_effects.py   reads a song's vocal effects (auto-tune, key, reverb, delay, width ...)
+  kit/rapreaper_separate.py  takes the voice out of a song: the Vocal Remover program, or the same
+                            networks through ONNX Runtime (model files in VocalRemover/models or kit/models)
+  kit/rapreaper_audio.py     the measuring code (loudness, noise, hum, tone, sibilance, gaps, clarity,
+                          breaths ...)
+  kit/rapreaper_helper.lua   RapReaper's own small helper inside REAPER: splits clips, cuts,
+                          mutes or turns pieces down, heals splits, removes slivers, restores a
+                          saved clip layout, moves clips (into place, or to another track), reads
+                          and sets sends, saves, opens and closes projects on request, and
+                          reads/writes a plug-in's settings block (for ReaTune's key and scale)
+  kit/PLAYBOOK.md         the working method Claude follows
+  kit/CHANGES-1.4.md      every problem met so far and the change it got, 1.4.0 to 1.4.5
+  kit/CHANGES-1.3.md, kit/CHANGES-older.md   the same for the earlier versions
+  kit/chains/             starter chains; your saved chains go in kit/chains/user
+  kit/effects/            RapReaper's own small "Ducks" effect (RapReaper/ducks.jsfx); the installer
+                          copies it into REAPER's Effects folder
+  kit/references/         put finished songs you like here (WAV) to compare against
+  kit/imports/            put a song exported from another program here (its tracks or its mix), in a folder
+                          named after the song, then ask Claude to remaster it
+  kit/exports/            where "export the mix" puts your bounced songs
+  kit/captures/           measurement recordings RapReaper makes and tidies up by itself (it keeps
+                          the newest ones, at most about 1.5 GB; you may empty it any time
+                          REAPER is closed)
+  kit/state/              the mix log, RapReaper's notes about your tracks, settings.json (the
+                          privacy level, expiry, the activity log on/off, the programs you allowed),
+                          install.json (the version installed), private_names.txt (which label stands
+                          for which name), songs/ (saved song setups), edits/ (restore points for
+                          clips) and transcripts/ (words written down by the transcriber, if you use one)
+  kit/logs/               sent_to_claude.log: every answer exactly as it was sent to Claude
+  kit/reaper-daemon/      the bridge script that runs inside REAPER (third-party, MIT
+                          licence, unmodified; see NOTICE.txt)
+  updates/                the files an update replaced (made by Update RapReaper.command)
+  build/                  how the kit is packaged (not needed to use it)
+  sim/  and  tests/       how this kit was tested before it was shipped: a simulated REAPER
+                          and the test programs (not needed to use RapReaper)
+
+Safety in one paragraph
+-----------------------
+RapReaper opens no network port and contains no network code (the one optional helper,
+"Get ffmpeg and Transcriber.command", is a separate script you start yourself); Claude
+talks to it through the app, and it talks to REAPER through small text files inside this
+folder. It can add and set plug-ins, move faders, add tracks and sends, and render
+measurement files and your exported songs into this folder. It can split a clip and cut
+out, mute or turn down a piece of it when you ask for that (empty air, a breath, a harsh
+S), put the clips back from a restore point, move clips into place or to another track,
+draw volume dips (ducks) on a plug-in of its own, rename a track, and remove a plug-in or
+an effect track it added itself (never a track with recordings on it). It cannot delete
+your files or your tracks, never overwrites a project: save_project does REAPER's own Save
+of the open project to its own file, only when you asked, and never Save As; open_project
+and close_project do what REAPER's File menu does and never drop unsaved changes without
+your word. It starts no other program, with the exceptions you allow by name yourself (see
+"Programs" below). Every change to your project is a named entry in REAPER's undo history
+(Cmd+Option+Z shows the list), and each answer says how to take that step back. When it
+has to switch a plug-in off or pull a fader down to measure, that change, the measurement
+and the change back are sent to REAPER as one command, so nothing is left changed even if
+Claude or this program is closed in the middle. Keep the folder in your own home folder:
+it is private to your account, and no program needs special permission to use it.
+
+What goes to Anthropic: the words you type and the text the tools answer (plug-in names,
+settings, measured numbers, track names, and the names of files and of the project only
+as the privacy level allows). Never audio. The answers never contain the folder paths on
+this Mac, your user name or the Mac's name (they say <RapReaper folder> and ~ instead);
+the same goes for RapReaper's log. The names of your music files (songs, beats, takes,
+stems, mixes, exports, the songs in the references and remaster folders) and of your saved
+projects are given as they are, so Claude can list what is in a folder and call songs by
+name; never a folder, a path or any other kind of file: at the default level (strict) a
+file that is not music is a label whose meaning stays on this Mac (kit/state/private_names.txt),
+and at maximum, track names are labels too. kit/logs/sent_to_claude.log shows you exactly
+what left this Mac, answer by answer. Name tracks plainly and leave personal details out of the chat: what you type goes
+to Anthropic regardless of the level. For troubleshooting only, RAPREAPER_PRIVACY=off shows
+the real paths again; 'status' always says which level is in force.
+
+Programs. What RapReaper will not run or load: it never starts a program it merely found on
+this Mac. Besides its own separation worker it can start only programs you allowed yourself,
+one at a time, with an "Allow ... .command" file: ffmpeg (MP3 and M4A copies of exports) and
+whisper.cpp (writing down a vocal's words for vocal_clarity). For each, RapReaper keeps the
+file's path and checksum in kit/state/settings.json and stops using it if the file changes
+(after "brew upgrade" changes one of them, allow the new file once more); each is started
+with fixed arguments, without a shell or a window, only on files inside RapReaper's own
+folders, and never goes online. The Kim Vocal 2 model file is checked against its published
+checksum before it is loaded. The bridge script and RapReaper's own helper script are checked
+against their checksums at every start; a changed file is reported and not used. A RapReaper
+zip is installed by the updater only when every file in it matches the zip's own manifest.
+Names from your project (tracks, files, notes) are data to Claude, never instructions;
+anything that removes or silences part of a recording, or opens or closes a project, happens
+only after you said yes to that step.

@@ -1,0 +1,60 @@
+# Builds RapReaper's three packages from source/ : Windows, Mac (Apple chip) and Mac-Intel.
+# On a tag "v*" (for example v1.4.6) the zips and SHA256SUMS.txt are attached to that GitHub release; started by hand
+# (Actions > build > Run workflow) they are kept as a downloadable artifact for 30 days.
+# The zips contain no model files: each person gets the model from its author (source/BUILDING.md).
+name: build
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.3"        # the version the released programs are built with (byte-identical builds)
+          cache: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Versions agree, every Python file compiles
+        run: python build/build_release.py --check
+
+      - name: Audio tests (measuring, music and alignment code)
+        run: |
+          python -m pip install --only-binary=:all: "numpy>=1.26,<3" "scipy>=1.11,<2" "lameenc>=1.7,<2"
+          python tests/test_audio.py
+
+      - name: Microsoft's runtime libraries, each checked by SHA-256
+        run: python build/fetch_runtime.py
+
+      - name: Build the three zips
+        run: python build/build_release.py --no-pdf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RapReaper-packages
+          path: |
+            source/dist/*.zip
+            source/dist/SHA256SUMS.txt
+          retention-days: 30
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            source/dist/*.zip
+            source/dist/SHA256SUMS.txt

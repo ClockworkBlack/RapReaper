@@ -1,0 +1,108 @@
+{
+ "name": "adlib-tucked",
+ "version": 1,
+ "role": "vocal",
+ "notes": "For ad-libs and doubles that should sit BEHIND the lead: thinner low end, firmer compression, a little darker, 3 dB quieter. Pan ad-libs left/right with set_track and send them to the same reverb as the lead.",
+ "slots": [
+  {
+   "slot": "hpf",
+   "add": [
+    "JS:sstillwell/hpflpf",
+    "JS: RBJ Highpass/Lowpass Filters"
+   ],
+   "bypassed": false,
+   "params": {
+    "HPF": "130 Hz",
+    "LPF": "22000 Hz",
+    "Gain": "0 dB"
+   }
+  },
+  {
+   "slot": "comp1",
+   "add": [
+    "ReaComp (Cockos)",
+    "ReaComp"
+   ],
+   "bypassed": false,
+   "params": {
+    "Ratio": "6",
+    "Attack": "3 ms",
+    "Release": "80 ms",
+    "Knee": "3 dB",
+    "RMS size|RMS": "5 ms",
+    "Thresh|Threshold": "-26 dB",
+    "Wet": "4 dB",
+    "Pre-comp|Precomp": "0 ms",
+    "AutoMkUp|Auto make-up|Auto makeup|Auto Make Up Gain|Auto make up gain": "off"
+   }
+  },
+  {
+   "slot": "eq_tone",
+   "add": [
+    "ReaEQ (Cockos)",
+    "ReaEQ"
+   ],
+   "bypassed": false,
+   "eq_moves": [
+    {
+     "kind": "bell",
+     "hz": 300,
+     "db": -3.0,
+     "bw": 1.2
+    },
+    {
+     "kind": "bell",
+     "hz": 3000,
+     "db": 1.5,
+     "bw": 1.6
+    },
+    {
+     "kind": "highshelf",
+     "hz": 9000,
+     "db": -2.0
+    }
+   ]
+  },
+  {
+   "slot": "deess",
+   "add": [
+    "JS:Liteon/deesser",
+    "JS: De-esser"
+   ],
+   "bypassed": false,
+   "params": {
+    "Processing": {
+     "norm": 0.0,
+     "shows": "Stereo"
+    },
+    "Target Type": {
+     "norm": 1.0,
+     "shows": "Hipass"
+    },
+    "Monitor": {
+     "norm": 0.0,
+     "shows": "Off"
+    },
+    "Time Constants": {
+     "norm": 0.0
+    },
+    "Gain": "0 dB",
+    "Frequency": "4000 Hz",
+    "Ratio": "20",
+    "Threshold": "-44 dB"
+   }
+  },
+  {
+   "slot": "trim",
+   "add": [
+    "JS:utility/volume_pan",
+    "JS: Volume/Pan Smoother"
+   ],
+   "bypassed": false,
+   "params": {
+    "Volume": "-3 dB",
+    "Pan": "0"
+   }
+  }
+ ]
+}
