@@ -1,0 +1,3 @@
+# RapReaper 1.4.4 (Vocal Remover 2.0): SHA-256 of the delivered files
+9221ee31512b44639ba649f2533c831a0d1a1c1293f1d5ed0d29af38822c1949  RapReaper-1.4.4-Windows.zip
+92633b6089858eb3483bc346ed3bce24c3eb643c86d84b69aad70f4d367d6bd3  RapReaper-1.4.4-Mac.zip

@@ -10,11 +10,11 @@ The latest version is **1.4.4**. Pick the one for your computer:
 
 | Computer | Download |
 |---|---|
-| 🪟 **Windows** (64-bit) | [RapReaper-1.4.4-Windows.zip](https://github.com/ClockworkBlack/RapReaper/releases/download/v1.4.4/RapReaper-1.4.4-Windows.zip) (28 MB) |
-| 🍎 **Mac** | [RapReaper-1.4.4-Mac.zip](https://github.com/ClockworkBlack/RapReaper/releases/download/v1.4.4/RapReaper-1.4.4-Mac.zip) (18 MB). The Vocal Remover needs Apple silicon (M1 or later). |
-| Checksums | [SHA256SUMS.txt](https://github.com/ClockworkBlack/RapReaper/releases/download/v1.4.4/SHA256SUMS.txt) |
+| 🪟 **Windows** (64-bit) | [RapReaper-1.4.4-Windows.zip](https://github.com/ClockworkBlack/RapReaper/raw/main/Windows/RapReaper-1.4.4-Windows.zip) (28 MB), in the [`Windows`](Windows) folder |
+| 🍎 **Mac** | [RapReaper-1.4.4-Mac.zip](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac/RapReaper-1.4.4-Mac.zip) (18 MB), in the [`Mac`](Mac) folder. The Vocal Remover needs Apple silicon (M1 or later). |
+| Checksums | [SHA256SUMS.txt](SHA256SUMS.txt) |
 
-Install steps, what's new and the security notes are on the [release page](https://github.com/ClockworkBlack/RapReaper/releases/tag/v1.4.4). Older and newer versions are under [Releases](https://github.com/ClockworkBlack/RapReaper/releases).
+Install steps, what's new and the security notes are in [RELEASE-NOTES.md](RELEASE-NOTES.md).
 
 ## What you need (all free)
 
