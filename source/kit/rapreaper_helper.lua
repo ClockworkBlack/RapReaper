@@ -50,7 +50,7 @@
 -- pieces a restore replaces), and every change is undoable (Ctrl+Z). A restore only re-creates clips
 -- from recordings this project already uses (or from the folder those recordings sit in).
 
-local VERSION = "1.4.6"
+local VERSION = "1.4.7"
 local KIT = RAPREAPER_KIT_DIR
 if type(KIT) ~= "string" or KIT == "" then
   if reaper and reaper.ShowConsoleMsg then reaper.ShowConsoleMsg("RapReaper helper: RAPREAPER_KIT_DIR is not set; not started.\n") end

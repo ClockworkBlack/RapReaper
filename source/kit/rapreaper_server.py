@@ -44,7 +44,7 @@ import traceback
 import unicodedata
 import uuid
 
-VERSION = "1.4.6"
+VERSION = "1.4.7"
 
 HOME = os.path.abspath(os.environ.get("RAPREAPER_HOME") or os.path.dirname(os.path.abspath(__file__)))
 BRIDGE_ROOT = os.path.abspath(os.environ.get("RAPREAPER_BRIDGE_ROOT") or os.path.join(HOME, "reaper-daemon"))
@@ -1711,8 +1711,12 @@ def _check_render_speed(track, start, seconds=None):
             raise
         times.append(time.time() - t0)
     per_second = (times[2] - times[1]) / 4.0
-    if per_second >= SLOW_RENDER_LIMIT:
-        raise ToolError(SLOW_RENDER % per_second)
+    # The difference of the two timed renders takes out REAPER's fixed costs, but a hiccup during the shorter one (a busy
+    # computer) shrinks it, and a REAPER set to render in real time slipped through below the limit (1.4.7). A render in
+    # real time never takes less than its own length, so both timed renders lasting about that long counts as well.
+    realtime = times[1] >= 0.95 * 2.0 and times[2] >= 0.95 * 6.0
+    if per_second >= SLOW_RENDER_LIMIT or realtime:
+        raise ToolError(SLOW_RENDER % max(per_second, times[2] / 6.0))
     if per_second >= 0.15 and _RENDER.get("rate") is None:
         _RENDER["rate"] = per_second               # clearly slow: start careful (a long render refines this)
     _RENDER["checked"] = True
@@ -3560,6 +3564,10 @@ def t_status(args):
     if not PRIVACY_ON:
         out["folder"] = HOME
     todo = []
+    stale = stale_server_text()
+    if stale:
+        out["installed_version"] = installed_version()
+        todo.append(stale)
     disk = _disk_note()
     if disk:
         free = free_disk_gb()
@@ -3640,6 +3648,10 @@ def t_status(args):
         todo.append("REAPER's preference 'Set media items offline when application is not active' is ON, which makes "
                     "measurements silent while Claude is in front. Use the fix_setup tool to switch it off, or do it "
                     "by hand: Options > Preferences, type 'offline' in the search box, untick it, OK.")
+    elif ctx.get("media_offline_when_inactive") is False and _offline_in_ini() is True:
+        out["after_reaper_restart"] = ("REAPER's preference 'Set media items offline when application is not active' is off "
+                                       "now, but REAPER's settings file still has it on, so it would come back the next time "
+                                       "REAPER starts. Use the fix_setup tool once to save it as off.")
     hs = helper_status()
     if _HELPER_CHANGED:
         out["clip_editing_and_effects"] = "NOT READY: " + HELPER_CHANGED_TEXT
@@ -3722,10 +3734,141 @@ def _last_event(action, within_seconds):
     return None
 
 
+OFFLINE_INI_KEY = b"offlineinact"      # reaper.ini, [REAPER]: 'Set media items offline when application is not active'
+INI_MAX_BYTES = 16 * 1024 * 1024
+
+
+def _reaper_ini_path():
+    """reaper.ini of the REAPER RapReaper was installed for: the folder the installer was given for a portable REAPER
+    (kit/state/install.json), else REAPER's usual settings folder. None when there is no such file."""
+    notes = _read_json(os.path.join(STATE, "install.json"), {})
+    res = notes.get("reaper_resource_dir") if isinstance(notes, dict) else None
+    if not (isinstance(res, str) and res and os.path.isdir(res)):
+        try:
+            res = reaperd.find_resource_dir() if reaperd else PF.reaper_resource_dir()
+        except Exception:                                   # pragma: no cover
+            res = None
+    path = os.path.join(res, "reaper.ini") if res else None
+    return path if path and os.path.isfile(path) else None
+
+
+def _ini_offline_lines(raw):
+    """(lines, index of the [REAPER] header, index of the offlineinact line, its value or None)."""
+    lines = raw.split(b"\n")
+    section, header, found, value = None, None, None, None
+    for i, line in enumerate(lines):
+        text = line.strip()
+        if text.startswith(b"[") and text.endswith(b"]"):
+            section = text[1:-1].strip().lower()
+            if section == b"reaper" and header is None:
+                header = i
+        elif section == b"reaper" and found is None and text.lower().startswith(OFFLINE_INI_KEY + b"="):
+            found = i
+            try:
+                value = int(text.split(b"=", 1)[1].strip() or b"0")
+            except ValueError:
+                value = -1                                  # not a number: treated as on (REAPER reads it as such)
+    return lines, header, found, value
+
+
+def _offline_in_ini():
+    """The preference as REAPER will read it at its next start: True (on), False (an explicit 0), None (not written there,
+    or no reaper.ini)."""
+    path = _reaper_ini_path()
+    if not path:
+        return None
+    try:
+        if os.path.getsize(path) > INI_MAX_BYTES:
+            return None
+        with open(path, "rb") as f:
+            _lines, _h, found, value = _ini_offline_lines(f.read())
+    except OSError:
+        return None
+    return None if found is None else value != 0
+
+
+def _persist_offline_off(add_line):
+    """Write offlineinact=0 into reaper.ini, so that the preference stays off when REAPER starts again. A script changes
+    a REAPER preference in memory only; REAPER read reaper.ini again at its next start and the preference came back on
+    with every restart (seen on 7 and 10 October 2026). Only that one line is changed (or added, with add_line, when
+    REAPER had the preference on and reaper.ini does not name it); a copy of the file is kept next to it first.
+    Returns (state, detail): 'saved' (detail: the copy's name), 'already', 'no_file' or 'failed' (detail: why)."""
+    path = _reaper_ini_path()
+    if not path:
+        return "no_file", "REAPER's settings file (reaper.ini) was not found where RapReaper looked"
+    try:
+        if os.path.getsize(path) > INI_MAX_BYTES:
+            return "failed", "reaper.ini is unexpectedly large, so it was left alone"
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError as e:
+        return "failed", "reaper.ini could not be read (%s)" % e.__class__.__name__
+    lines, header, found, value = _ini_offline_lines(raw)
+    if found is not None:
+        if value == 0:
+            return "already", None
+        tail = b"\r" if lines[found].endswith(b"\r") else b""
+        lines[found] = OFFLINE_INI_KEY + b"=0" + tail
+    else:
+        if not add_line:
+            return "already", None
+        if header is None:
+            return "failed", "reaper.ini has no [REAPER] section, so it was left alone"
+        tail = b"\r" if lines[header].endswith(b"\r") else b""
+        lines.insert(header + 1, OFFLINE_INI_KEY + b"=0" + tail)
+    copy = path + ".rapreaper-backup-" + time.strftime("%Y%m%d-%H%M%S")
+    tmp = path + ".rapreaper-tmp"
+    try:
+        with open(copy, "wb") as f:
+            f.write(raw)
+        with open(tmp, "wb") as f:
+            f.write(b"\n".join(lines))
+        for tries_left in (4, 3, 2, 1, 0):
+            try:
+                os.replace(tmp, path)
+                break
+            except OSError:                     # Windows: a virus scanner, indexer or backup tool has the file open
+                if not tries_left:
+                    raise
+                time.sleep(0.1)
+    except OSError as e:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return "failed", "reaper.ini could not be written (%s)" % e.__class__.__name__
+    return "saved", os.path.basename(copy)
+
+
+def _persist_note(state, detail):
+    """What the answer says about the preference after the next start of REAPER."""
+    if state in ("saved", "already"):
+        return True, ("Saved in REAPER's settings file too (reaper.ini%s), so it should stay off when REAPER starts again. If "
+                      "it is ever on again after a restart, untick it once by hand (Options > Preferences, type 'offline' in "
+                      "the search box, untick it, OK), which REAPER saves itself."
+                      % (", a copy of the old file kept as %s" % detail if state == "saved" else ""))
+    return False, ("Off for as long as REAPER runs, but %s: if it is on again after REAPER restarts, untick it once by hand "
+                   "(Options > Preferences, type 'offline' in the search box, untick it, OK), which REAPER saves." % detail)
+
+
 def t_fix_setup(args):
     """Switch off the one REAPER preference that makes measuring impossible."""
     ctx = context(False)
     if ctx.get("media_offline_when_inactive") is not True:
+        if _offline_in_ini() is True:
+            # off in the running REAPER, but its settings file still has it on: it would come back at the next start
+            state, detail = _persist_offline_off(add_line=False)
+            if state == "saved":
+                log_event("fix setup", preference="Set media items offline when application is not active", now="off",
+                          saved_in="reaper.ini")
+                return {"changed": True,
+                        "what": "REAPER had 'Set media items offline when application is not active' off already, but its "
+                                "settings file (reaper.ini) still had it on, so it would have come back the next time REAPER "
+                                "starts. Saved it as off (a copy of the old file kept as %s)." % detail,
+                        "stays_off_after_restart": True}
+            stays, note = _persist_note(state, detail)
+            return {"changed": False, "stays_off_after_restart": stays,
+                    "note": "REAPER keeps audio loaded while other windows are in front right now. " + note}
         return {"changed": False, "note": "Nothing to fix: REAPER already keeps audio loaded while other windows are in front."}
     try:
         data = bridge("set_media_offline_when_inactive", {"enabled": False})
@@ -3740,13 +3883,17 @@ def t_fix_setup(args):
         back = bridge("set_all_media_online", {}, label="RapReaper: reload audio files (nothing changed)")
     except ToolError:
         pass
-    log_event("fix setup", preference="Set media items offline when application is not active", now="off")
+    state, detail = _persist_offline_off(add_line=True)
+    stays, note = _persist_note(state, detail)
+    log_event("fix setup", preference="Set media items offline when application is not active", now="off",
+              saved_in="reaper.ini" if state == "saved" else state)
     return {"changed": True,
             "what": "Switched OFF REAPER's preference 'Set media items offline when application is not active'.",
             "why": "With it on, REAPER unloads your audio whenever another window (such as Claude) is in front, so every "
                    "measurement came back silent.",
             "audio_files_back_online": back.get("online"), "still_offline": back.get("still_offline"),
             "previous_value": data.get("raw_before"),
+            "stays_off_after_restart": stays, "after_restart": note,
             "undo": "This is a REAPER preference, so Ctrl+Z does not bring it back. To switch it on again: Options > "
                     "Preferences in REAPER, type 'offline' in the search box, tick it, OK."}
 
@@ -3859,8 +4006,8 @@ class _SelfTest:
             if fixed.get("changed") and ctx.get("media_offline_when_inactive") is not True:
                 self.check("REAPER keeps audio loaded while other windows are in front", True,
                            "The preference 'Set media items offline when application is not active' was ON; the self-test switched it "
-                           "OFF (%s audio files back online). It is a REAPER preference: Options > Preferences, search 'offline', to "
-                           "see it." % fixed.get("audio_files_back_online"))
+                           "OFF (%s audio files back online). %s It is a REAPER preference: Options > Preferences, search "
+                           "'offline', to see it." % (fixed.get("audio_files_back_online"), fixed.get("after_restart") or ""))
                 self.run.setdefault("extra", {})["fixed_setup"] = fixed.get("what")
             else:
                 self.check("REAPER keeps audio loaded while other windows are in front", False,
@@ -12247,6 +12394,43 @@ def _news_tail():
     return (" Also, before this call: " + text) if text else ""
 
 
+# After "Update RapReaper" the files on disk are the new version, but Claude keeps running the tool server it started
+# before, until Claude itself is restarted. That half-updated state was met on 4, 7 and 23 October 2026 ("the tool server
+# I talk to is still the old one", new options refused, status showing the old version) and cost a round of guessing each
+# time. The server reads the version written in its own file now and then, and says so plainly when it differs.
+_SELF_FILE = os.path.abspath(__file__)
+_DISK_VERSION = {"checked": 0.0, "version": None}
+_DISK_VERSION_EVERY = 15.0             # seconds between looks at the file (a read of its first lines)
+
+
+def installed_version():
+    """The RapReaper version written in this server's file on disk now (after an update: the new one), or None."""
+    now = time.time()
+    if now - _DISK_VERSION["checked"] < _DISK_VERSION_EVERY:
+        return _DISK_VERSION["version"]
+    _DISK_VERSION["checked"] = now
+    try:
+        with open(_SELF_FILE, "rb") as f:
+            head = f.read(64 * 1024)
+        m = re.search(rb'^VERSION = "([0-9]+(?:\.[0-9]+){0,3})"', head, re.M)
+        _DISK_VERSION["version"] = m.group(1).decode("ascii") if m else None
+    except OSError:
+        pass                                   # (being replaced this very moment: the next look sees it)
+    return _DISK_VERSION["version"]
+
+
+def stale_server_text():
+    """The sentence for Claude when RapReaper was updated on disk but this (older or other) server is still running."""
+    disk = installed_version()
+    if not disk or disk == VERSION:
+        return None
+    how = ("Claude > Quit Claude in the menu bar (or Cmd+Q)" if PF.IS_MAC
+           else "right-click Claude's icon near the clock > Quit")
+    return ("RapReaper %s is installed, but Claude is still running the RapReaper %s tool server it started before the "
+            "update. Quit Claude completely (%s) and open it again; until then the new version's tools and options are not "
+            "available, and parts that changed may refuse to work." % (disk, VERSION, how))
+
+
 def _news_not_delivered():
     """The answer that carried the news was not sent after all (the request had been withdrawn)."""
     if _NEWS["last"]:
@@ -12374,6 +12558,9 @@ def call_tool(name, args, progress_fn=None, cancelled_fn=None):
             undo = _undo_text()
             if undo and "undo" not in result:          # (a tool that explains its own way back keeps its words)
                 result["undo"] = undo
+            stale = stale_server_text()
+            if stale and "restart_claude" not in result and name != "status":      # (status lists it under to_do)
+                result["restart_claude"] = stale
         text = _clean_text(json.dumps(_finite(_private(result)), indent=1, ensure_ascii=False, default=str, allow_nan=False))
         if len(text) > ANSWER_MAX_CHARS:
             # No answer is meant to be this long: the biggest (a self-test, a long track's details) stay under a tenth of it.
@@ -12400,6 +12587,9 @@ def call_tool(name, args, progress_fn=None, cancelled_fn=None):
         msg = _names_in_sentence(str(e))            # (a track name in a sentence of the error: its label where it has one)
         if len(msg) > 4000:                          # (an argument of a million characters is never echoed back whole)
             msg = msg[:4000] + " ... (cut short)"
+        stale = stale_server_text()
+        if stale:
+            msg = "%s (%s)" % (msg, stale)
         return {"content": [{"type": "text", "text": _clean_text(_private("RapReaper could not do that: %s%s%s" % (msg, tail, _news_tail())))}],
                 "isError": True}
     except Exception as e:  # never let one bad call kill the server
@@ -12517,7 +12707,8 @@ def handle(msg, progress_fn=None, cancelled_fn=None):
     elif method == "tools/call":
         name = params.get("name")
         if not isinstance(name, str) or name not in TOOL_INDEX:
-            return _error(mid, -32602, "Unknown tool: %s" % (_label(name, 100),))
+            stale = stale_server_text()
+            return _error(mid, -32602, "Unknown tool: %s%s" % (_label(name, 100), (". " + stale) if stale else ""))
         try:
             res = call_tool(name, params.get("arguments") if params.get("arguments") is not None else {},
                             progress_fn, cancelled_fn)

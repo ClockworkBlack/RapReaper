@@ -9,7 +9,10 @@ the person listens. They cannot see tool results, so tell them what happened in 
 ## At the start of every conversation
 
 1. `status`. If `ready` is false, go through `to_do` with the person one item at a time and stop until it is
-   ready. If status mentions the "offline" preference, run `fix_setup` (the self-test also switches it off itself). If status lists something under
+   ready. If status mentions the "offline" preference, run `fix_setup` (the self-test also switches it off itself);
+   the same when status has `after_reaper_restart` (the preference would come back at REAPER's next start). If
+   `to_do` (or any answer, under `restart_claude`) says a newer RapReaper is installed than the one running, tell the
+   person first: quit Claude completely and open it again; nothing else helps until then. If status lists something under
    `unfinished` (a self-test or a loudness job that was cut off), say so and offer to carry on with it.
    If `self_test` in the status says it has not been run with a real recording on this PC, run `self_test`
    once the project has audio in it, and read out any failed check with its fix.

@@ -90,7 +90,9 @@ RAPREAPER_E2E_DIR=/path/with/room python3 tests/e2e.py   # everything, 1.5-2 hou
 RAPREAPER_E2E_DIR=/path/with/room python3 tests/e2e.py installer projects_fit remaster   # some scenarios
 ```
 
-- Needs `lua5.4` (or `lua` 5.4), NumPy, SciPy, `lameenc` (for the MP3 export tests), optionally `onnxruntime`.
+- Needs `lua5.4` (or `lua` 5.4), NumPy, SciPy, `lameenc` (for the MP3 export tests), optionally `onnxruntime`. Without a
+  Lua 5.4 of its own, `pip install lupa` is enough: `tests/harness.py` then runs the simulated REAPER through
+  `tests/lua54_standin.py` (the Lua 5.4 inside lupa, plus the read-only `io.popen` the simulator needs).
 - Always give `RAPREAPER_E2E_DIR` a folder on a disk with room (never the default temp folder if that is small: a run that
   fills the disk dies half-way and takes its own log with it).
 - Run the suite on a **copy** of the tree, never on the tree being edited: the tests start the server from the files as

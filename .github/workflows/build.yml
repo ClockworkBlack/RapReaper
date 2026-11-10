@@ -1,11 +1,13 @@
 # Builds RapReaper's three packages from source/ : Windows, Mac (Apple chip) and Mac-Intel.
-# On a tag "v*" (for example v1.4.6) the zips and SHA256SUMS.txt are attached to that GitHub release; started by hand
-# (Actions > build > Run workflow) they are kept as a downloadable artifact for 30 days.
+# On a tag "v*" (for example v1.4.6) the zips and SHA256SUMS.txt are attached to that GitHub release. On every push to
+# the Nightly branch, and when started by hand (Actions > build > Run workflow), they are kept as a downloadable
+# artifact for 30 days (Actions > the run > Artifacts).
 # The zips contain no model files: each person gets the model from its author (source/BUILDING.md).
 name: build
 on:
   push:
     tags: ["v*"]
+    branches: ["Nightly"]
   workflow_dispatch:
 
 permissions:
@@ -36,6 +38,11 @@ jobs:
         run: |
           python -m pip install --only-binary=:all: "numpy>=1.26,<3" "scipy>=1.11,<2" "lameenc>=1.7,<2"
           python tests/test_audio.py
+
+      - name: End-to-end smoke tests (the real server against the simulated REAPER)
+        run: |
+          python -m pip install --only-binary=:all: "lupa==2.4"
+          python tests/e2e.py protocol main offline installer intel_mac nightly
 
       - name: Microsoft's runtime libraries, each checked by SHA-256
         run: python build/fetch_runtime.py

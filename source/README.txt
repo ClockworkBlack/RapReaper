@@ -1,4 +1,4 @@
-RapReaper 1.4.6 - mix rap vocals in REAPER by talking to Claude (Windows)
+RapReaper 1.4.7 - mix rap vocals in REAPER by talking to Claude (Windows)
 =======================================================================
 
 What this folder is
@@ -74,6 +74,29 @@ Updating
   loads at start; status reminds you until you do).
   From 1.3.2 or older (no Update file yet): unzip the new zip over the old folder once,
   replacing files (nothing of yours is in the zip), then double-click Install RapReaper.bat.
+
+What changed in 1.4.7, nightly (9 November 2026)
+------------------------------------------------
+  A nightly build: the fixes for every problem met with RapReaper so far that were still
+  open. Use it to try them before they come out as a release.
+  - "Get Vocal Remover Model.bat" stopped at its last step on most computers: the model
+    builder needed the Python package PyYAML, which the installer never installs. It now
+    reads the model's settings file by itself, and the model comes out byte for byte the
+    published file as before.
+  - REAPER's preference "Set media items offline when application is not active" came back
+    on every time REAPER started (7 and 10 October). fix_setup and the self-test switched it
+    off in the running REAPER only; they now save it in REAPER's settings file too
+    (reaper.ini, a copy of the old file kept next to it). status says when it would come
+    back at the next start.
+  - After Update RapReaper, Claude kept running the previous version until Claude itself was
+    restarted, and new options were refused without saying why (4, 7 and 23 October). Every
+    answer now says so ("Quit Claude completely and open it again") until you do.
+  - A REAPER set to render in real time could slip past the speed check when the computer
+    was busy, and a long measurement then ran in real time. It is caught now.
+  - "Get Vocal Remover Model.bat" had line ends Windows' cmd can misread; it has Windows'
+    own now, like every other .bat file.
+  Details in kit\CHANGES-1.4.md ("1.4.7"). The helper inside REAPER is 1.4.7 (one version
+  line); the Vocal Remover is unchanged (2.0.3).
 
 What changed in 1.4.6 (9 November 2026)
 ---------------------------------------

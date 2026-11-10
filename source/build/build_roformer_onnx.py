@@ -40,9 +40,95 @@ from onnxwriter import Graph          # noqa: E402
 from torch_ckpt import load_state_dict   # noqa: E402
 
 
+class ConfigError(ValueError):
+    pass
+
+
+def _yaml_scalar(text):
+    """A plain YAML 1.1 scalar as PyYAML's safe_load reads the ones these config files use."""
+    t = text.strip()
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in "'\"":
+        return t[1:-1]
+    low = t.lower()
+    if low in ("", "~", "null"):
+        return None
+    if low in ("true", "yes", "on"):
+        return True
+    if low in ("false", "no", "off"):
+        return False
+    if re.fullmatch(r'[-+]?(0|[1-9][0-9_]*)', t):
+        return int(t.replace('_', ''))
+    if re.fullmatch(r'[-+]?([0-9][0-9_]*)?\.[0-9_]*([eE][-+][0-9]+)?', t) and re.search(r'[0-9]', t):
+        return float(t.replace('_', ''))
+    if t[0] in '[{&*!|>%@`':
+        raise ConfigError('unsupported YAML value: %r' % t)
+    return t
+
+
+def _strip_comment(line):
+    """The line without its comment: a # at the start or after a space, outside quotes."""
+    quote = None
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "'\"" and (i == 0 or line[i - 1] in ' :-'):
+            quote = ch
+        elif ch == '#' and (i == 0 or line[i - 1] in ' \t'):
+            return line[:i]
+    return line
+
+
 def load_yaml(path):
-    import yaml
-    return yaml.safe_load(open(path).read().replace('!!python/tuple', ''))
+    """The training config (a model's .yaml) as a dict. These files use only block mappings, block lists ("- x", also
+    at the indentation of their key), plain scalars, comments and the tag !!python/tuple, so this reads them with the
+    standard library alone (RapReaper's Python has no PyYAML). Anything else is refused rather than guessed: the
+    built model is checked against its published checksum in any case."""
+    with open(path, encoding='utf-8') as f:
+        raw = f.read().replace('!!python/tuple', '')
+    lines = []
+    for n, line in enumerate(raw.split('\n'), 1):
+        if '\t' in line[:len(line) - len(line.lstrip())]:
+            raise ConfigError('line %d: tab in indentation' % n)
+        body = _strip_comment(line).rstrip()
+        if body.strip() and body.strip() != '---':
+            lines.append((len(body) - len(body.lstrip()), body.strip(), n))
+
+    def block(i, indent):
+        """The block starting at lines[i] (indentation `indent`): (value, next index)."""
+        if lines[i][1].startswith('- ') or lines[i][1] == '-':
+            out = []
+            while i < len(lines) and lines[i][0] == indent and (lines[i][1].startswith('- ') or lines[i][1] == '-'):
+                item = lines[i][1][1:].strip()
+                if not item or ':' in item.split('#')[0] and re.match(r'[^\'"]+:\s', item + ' '):
+                    raise ConfigError('line %d: only plain list items are supported' % lines[i][2])
+                out.append(_yaml_scalar(item))
+                i += 1
+            return out, i
+        out = {}
+        while i < len(lines) and lines[i][0] == indent:
+            ind, text, n = lines[i]
+            m = re.match(r'^([^:\'"]+?):(\s+(.*))?$', text)
+            if not m:
+                raise ConfigError('line %d: expected "key: value"' % n)
+            key, rest = m.group(1).strip(), (m.group(3) or '').strip()
+            if key in out:
+                raise ConfigError('line %d: key %r twice' % (n, key))
+            i += 1
+            if rest:
+                out[key] = _yaml_scalar(rest)
+            elif i < len(lines) and (lines[i][0] > ind or (lines[i][0] == ind and lines[i][1].startswith('-'))):
+                out[key], i = block(i, lines[i][0])
+            else:
+                out[key] = None
+        return out, i
+
+    if not lines:
+        return {}
+    cfg, i = block(0, lines[0][0])
+    if i != len(lines):
+        raise ConfigError('line %d: unexpected indentation' % lines[i][2])
+    return cfg
 
 
 # ---- mel filter bank (librosa.filters.mel with its defaults: Slaney scale, fmin 0, fmax sr/2) ----------------

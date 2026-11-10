@@ -427,10 +427,12 @@ def scenario_guards():
           (sorted(s_os), sorted(a_os)))
     check("... and neither file calls eval, exec, compile or __import__",
           not ({"eval", "exec", "compile", "__import__"} & (s_calls | a_calls)), sorted(s_calls & {"eval", "exec", "compile", "__import__"}))
-    check("tripwire: the server opens a file for writing in exactly six places (its JSON notes, the mix log's trimmed copy, a command "
-          "to its helper, a new export, an MP3 copy of it; and -- 1.4.1 -- open_private, the one way the mix log, the activity log "
-          "and the plain-words list of labels are written, readable by this account only)",
-          s_writes == ["w", "w", "w", "xb", "xb"] and src.count("open_private(") == 4, (s_writes, src.count("open_private(")))
+    check("tripwire: the server opens a file for writing in exactly eight places (its JSON notes, the mix log's trimmed copy, a "
+          "command to its helper, a new export, an MP3 copy of it; -- 1.4.1 -- open_private, the one way the mix log, the activity "
+          "log and the plain-words list of labels are written, readable by this account only; and -- 1.4.7 -- REAPER's reaper.ini "
+          "when fix_setup saves the offline preference there: the copy of the old file, and the new file under a temporary name)",
+          s_writes == ["w", "w", "w", "wb", "wb", "xb", "xb"] and src.count("open_private(") == 4
+          and src.count('open(copy, "wb")') == 1 and src.count('open(tmp, "wb")') == 1, (s_writes, src.count("open_private(")))
     check("... no 'from module import name' brings in anything but: annotations, and SciPy's signal toolbox; nothing gives the "
           "'os' module a second name; and neither file reaches a function through getattr(os, ...)",
           s_names == {"__future__.annotations"} and a_names == {"__future__.annotations", "scipy.signal"}
@@ -443,11 +445,12 @@ def scenario_guards():
           "list; an old capture and REAPER's side files for it; a file in one of its own folders, for expiry and the privacy tool's "
           "clear; a helper command it takes back and a helper reply it has read; a song setup the person asked to delete; and -- "
           "1.3.0 -- the WAV it hands to ffmpeg and the decoded copy it reads back after an MP3/M4A export, and the 16 kHz copy of a "
-          "vocal it hands to the transcriber), and the measuring code deletes nothing",
+          "vocal it hands to the transcriber; and -- 1.4.7 -- the new reaper.ini under its temporary name when it could not be put "
+          "in place), and the measuring code deletes nothing",
           sorted(s_removes) == sorted(["_activity_write: older", "_clear_dead_render_lock: LOCK_FILE", "_encode_lossy: back", "_encode_lossy: tmp", "_exchange: outbox",
                         "_late_reply_says_done: path", "_pending_clear: PENDING_FILE", "_prune_captures: gone", "_remove_files: p",
                         "_sweep_outbox: reply", "_transcribe: wav", "_withdraw: inbox", "_withdraw: processing", "helper: final",
-                        "helper: final", "helper: reply_path", "t_song_setup: path", "_exchange: inbox"])
+                        "helper: final", "helper: reply_path", "t_song_setup: path", "_exchange: inbox", "_persist_offline_off: tmp"])
           and a_removes == [], (s_removes, a_removes))
     # The bridge's own client (vendored, unmodified) is a bigger file with features RapReaper does not use; some of
     # them start programs. RapReaper calls three of its functions. What can those three reach?
@@ -1168,6 +1171,85 @@ def scenario_offline():
         err = c.close()
         sb.stop()
 
+    # Nightly 1.4.7: the preference came back on with every restart of REAPER (7 and 10 October 2026), because a script
+    # changes it in REAPER's memory only. fix_setup now also writes it into reaper.ini.
+    print("\n--- offline-media preference, kept off after REAPER restarts (reaper.ini) ---")
+
+    def with_ini(name, live, ini_bytes):
+        sb = project(Sandbox(os.path.join(BASE, name), [], offlineinact=live), vocal=dirty_vocal(20.0), beat=False)
+        cfg = os.path.join(sb.bridge_root, "bridge", "bridge_config.json")
+        d = json.load(open(cfg))
+        d["allow_preference_writes"] = True
+        json.dump(d, open(cfg, "w"))
+        res = os.path.join(sb.sim, "resource")
+        os.makedirs(res, exist_ok=True)
+        ini = os.path.join(res, "reaper.ini")
+        if ini_bytes is not None:
+            with open(ini, "wb") as f:
+                f.write(ini_bytes)
+        return sb.start(), ini
+
+    def copies(ini):
+        d = os.path.dirname(ini)
+        return [os.path.join(d, n) for n in os.listdir(d) if n.startswith("reaper.ini.rapreaper-backup-")]
+
+    original = (b"[REAPER]\r\nafxcfg=0\r\nofflineinact=1\r\nprojrecforopen=0\r\n[Recent]\r\nrecent01=C:\\songs\\a.rpp\r\n"
+                b"[other]\r\nofflineinact=5\r\n")
+    sb, ini = with_ini("offline_ini", 1, original)
+    c = Client(sb.kit)
+    try:
+        ok, r = call(c, "fix_setup")
+        now = open(ini, "rb").read()
+        check("fix_setup: switched off in REAPER AND in reaper.ini (only that one line, in [REAPER]; CRLF and every other "
+              "line kept; another section's key of that name untouched)",
+              ok and r["changed"] is True and sb.state()["config"]["offlineinact"] == 0
+              and now == original.replace(b"offlineinact=1\r\n", b"offlineinact=0\r\n", 1) and b"[other]\r\nofflineinact=5" in now, (r, now))
+        check("... a copy of the old reaper.ini is kept next to it, byte for byte, and the answer says it stays off after a "
+              "restart", ok and len(copies(ini)) == 1 and open(copies(ini)[0], "rb").read() == original
+              and r.get("stays_off_after_restart") is True and "starts again" in str(r.get("after_restart")), (r, copies(ini)))
+        ok, r = call(c, "fix_setup")
+        check("fix_setup again: nothing to fix, nothing written", ok and r["changed"] is False and len(copies(ini)) == 1, r)
+    finally:
+        c.close()
+        sb.stop()
+
+    sb, ini = with_ini("offline_ini_stale", 0, b"[REAPER]\nofflineinact=1\n")
+    c = Client(sb.kit)
+    try:
+        ok, r = call(c, "status")
+        check("status: off in REAPER but still on in reaper.ini -> says it would come back at the next start (not a "
+              "blocker: measuring works now)", ok and "come back" in str(r.get("after_reaper_restart")) and r.get("ready") is True, r)
+        ok, r = call(c, "fix_setup")
+        check("fix_setup saves it as off in reaper.ini (LF line endings kept)", ok and r["changed"] is True
+              and open(ini, "rb").read() == b"[REAPER]\nofflineinact=0\n" and r.get("stays_off_after_restart") is True, r)
+        ok, r = call(c, "status")
+        check("status: nothing more said about it", ok and "after_reaper_restart" not in r and r.get("ready") is True, r)
+    finally:
+        c.close()
+        sb.stop()
+
+    sb, ini = with_ini("offline_ini_absent", 1, b"[REAPER]\r\nafxcfg=0\r\n[Recent]\r\n")
+    c = Client(sb.kit)
+    try:
+        ok, r = call(c, "fix_setup")
+        check("REAPER had it on and reaper.ini does not name it: the line is added to [REAPER] as off",
+              ok and r["changed"] is True and open(ini, "rb").read() == b"[REAPER]\r\nofflineinact=0\r\nafxcfg=0\r\n[Recent]\r\n", r)
+    finally:
+        c.close()
+        sb.stop()
+
+    sb, ini = with_ini("offline_ini_none", 1, None)
+    c = Client(sb.kit)
+    try:
+        ok, r = call(c, "fix_setup")
+        check("no reaper.ini found: switched off for this session, and the answer says how to make it stick by hand",
+              ok and r["changed"] is True and r.get("stays_off_after_restart") is False and "by hand" in str(r.get("after_restart"))
+              and not os.path.exists(ini), r)
+    finally:
+        err = c.close()
+        sb.stop()
+    check("no Python traceback in the server log (reaper.ini)", "Traceback" not in err, err[-600:])
+
     print("\n--- offline-media preference, bridge not allowed to change preferences ---")
     sb = project(Sandbox(os.path.join(BASE, "offline2"), [], offlineinact=1), vocal=dirty_vocal(20.0), beat=False).start()
     c = Client(sb.kit)
@@ -1234,6 +1316,20 @@ def scenario_realtime_render():
         fails = [x for x in (r.get("checks") or []) if x["result"] != "PASS"] if ok else []
         check("self_test reports the same thing as a failed check with the fix",
               ok and len(fails) == 1 and "Full-speed Offline" in fails[0]["detail"], r)
+    finally:
+        c.close()
+        sb.stop()
+    # 1.4.7: a busy computer stalls the first timed test render by 1.5 s. The difference of the two timed renders then
+    # came out at about 0.6 s per second and a REAPER rendering in real time slipped through (seen in a test run under load)
+    sb = project(Sandbox(os.path.join(BASE, "realtime_hiccup"), [], realtime=True), vocal=dirty_vocal(20.0), beat=False).start()
+    c = Client(sb.kit)
+    try:
+        with open(os.path.join(sb.sim, "slow_in"), "w") as f:
+            f.write("2 1.5")                          # the 2nd render (the first timed one) waits 1.5 s more
+        t0 = time.time()
+        ok, r = call(c, "vocal_chain", track="Lead Vox", stage="plan")
+        check("real-time rendering is still caught when the shorter test render is held up by a busy computer",
+              (not ok) and "Full-speed Offline" in r and time.time() - t0 < 45 and not os.path.exists(os.path.join(sb.sim, "slow_in")), r)
     finally:
         c.close()
         sb.stop()
@@ -1565,7 +1661,7 @@ def scenario_installer():
 
     # A start-up script of the person's own that ends with a top-level 'return': Lua allows nothing after that,
     # so a block added at the end would stop the whole file from loading. The block goes first.
-    lua = os.environ.get("LUA") or shutil.which("lua5.4") or shutil.which("lua") or "lua"
+    from harness import LUA_CMD
     ends = b"local t = os.time()\nif t then return end\nreturn\n"
     e, st, cf = profile("p_return", startup_bytes=ends)
     rc, out = run_in(e)
@@ -1575,10 +1671,10 @@ def scenario_installer():
     open(helper, "w").write("local f = assert(io.open(arg[1], 'rb')); local s = f:read('a'); f:close()\n"
                             "local fn, err = load((arg[2] or '') .. s, 'startup', 't')\n"
                             "if not fn then io.stderr:write(tostring(err)); os.exit(3) end\nos.exit(0)\n")
-    comp = subprocess.run([lua, helper, st], capture_output=True, text=True, timeout=60)
+    comp = subprocess.run(LUA_CMD + [helper, st], capture_output=True, text=True, timeout=60)
     check("a startup script that ends with 'return': the block goes first and the file still compiles",
           rc == 0 and data == block + ends and comp.returncode == 0, (rc, comp.returncode, comp.stderr[-300:], data[-60:]))
-    bad_order = subprocess.run([lua, helper, st, ends.decode()], capture_output=True, text=True, timeout=60)
+    bad_order = subprocess.run(LUA_CMD + [helper, st, ends.decode()], capture_output=True, text=True, timeout=60)
     check("... (and the test can tell: the same block AFTER those lines does not compile)",
           bad_order.returncode == 3 and "near" in bad_order.stderr, (bad_order.returncode, bad_order.stderr[-200:]))
     old_layout = b"-- mine\nlocal y = 2\n" + block
@@ -4966,8 +5062,9 @@ def _song_effects_files(c, sb, refs):
     argv = open(os.path.join(fake_dir, "argv.txt")).read().strip().splitlines()
     check("the program writes into the job's own empty folder (not into imports), with ONNX Runtime's telemetry off",
           argv and "'--out', '%s" % os.path.join(sb.kit, "state", "sep") in argv[-1] and argv[-1].endswith("ORT=1"), argv[-1:])
+    # (".keep" is the placeholder every folder RapReaper fills has shipped with since 1.4.6; RapReaper never lists it)
     check("the job's working folder is cleared, and no side file is left among the music in imports",
-          os.listdir(os.path.join(sb.kit, "state", "sep")) == [] and all(n.endswith(".wav") for n in os.listdir(imps)),
+          os.listdir(os.path.join(sb.kit, "state", "sep")) == [] and all(n.endswith(".wav") for n in os.listdir(imps) if n != ".keep"),
           (os.listdir(os.path.join(sb.kit, "state", "sep")), sorted(os.listdir(imps))))
     jid = json.load(open(os.path.join(sb.kit, "state", "separate_job.json"))).get("id")
     ok, r = call(c, "separate_song", file="Night.wav")
@@ -7395,6 +7492,79 @@ def scenario_audit_round2():
 
 
 
+def scenario_nightly():
+    """Nightly 1.4.7: a tool server left running after an update says so; the model build needs no PyYAML."""
+    import subprocess
+    print("\n--- a tool server left running after an update (1.4.7) ---")
+    sb = project(Sandbox(os.path.join(BASE, "stale_server"), []), vocal=dirty_vocal(10.0), beat=False).start()
+    c = Client(sb.kit)
+    server_file = os.path.join(sb.kit, "rapreaper_server.py")
+    try:
+        ok, r = call(c, "status")
+        check("status, files and running server the same version: nothing said about restarting",
+              ok and not any("Quit Claude" in t for t in r.get("to_do", [])) and "installed_version" not in r, r)
+        running = r.get("rapreaper_version") if ok else None
+        # what Update RapReaper does: the server's file on disk becomes the new version while this one keeps running
+        src = open(server_file, encoding="utf-8").read()
+        assert src.count('\nVERSION = "%s"' % running) == 1
+        open(server_file, "w", encoding="utf-8").write(src.replace('\nVERSION = "%s"' % running, '\nVERSION = "9.9.9"'))
+        time.sleep(16)                               # (the server looks at its file at most every 15 seconds)
+        ok, r = call(c, "status")
+        check("status after an update on disk: not ready, says 9.9.9 is installed but %s still runs, and to quit Claude "
+              "completely and open it again" % running,
+              ok and r.get("ready") is False and r.get("installed_version") == "9.9.9"
+              and any("9.9.9 is installed" in t and running in t and "Quit Claude completely" in t for t in r.get("to_do", [])), r)
+        ok, r = call(c, "reference_card", topic="compression")
+        check("any other answer carries the same note under restart_claude", ok and "9.9.9" in str(r.get("restart_claude")), r)
+        ok, r = call(c, "measure", track="Lead Vox", new_option_of_9_9_9=True)
+        check("an option the running server does not know (the update's new option): ignored with a note, and the answer "
+              "says why (the restart)", ok and "was ignored" in str(r.get("options_note")) and "Quit Claude completely"
+              in str(r.get("restart_claude")), {k: r.get(k) for k in ("options_note", "restart_claude")} if ok else r)
+        ok, r = call(c, "measure", track="No Such Track")
+        check("an error carries the restart note too", not ok and "Quit Claude completely" in r, r)
+        rep = c.rpc("tools/call", {"name": "tool_of_9_9_9", "arguments": {}})
+        check("a tool the running server does not know is refused with the restart note too",
+              "error" in rep and "Quit Claude completely" in rep["error"]["message"], rep)
+    finally:
+        err = c.close()
+        sb.stop()
+    check("no Python traceback in the server log (stale server)", "Traceback" not in err, err[-600:])
+
+    print("\n--- the Vocal Remover's model builds without PyYAML (1.4.7) ---")
+    build_dir = os.path.join(os.path.dirname(HERE), "build")
+    cfg_text = ("audio:\n  chunk_size: 485100\n  min_mean_abs: 0.000\n\nmodel:\n  dim: 384\n  stereo: true\n  flash_attn: True\n"
+                "  sample_rate: 44100  # needed for mel filter bank\n  stft_normalized: False\n  sizes: !!python/tuple\n"
+                "  - 4096\n  - 2048\n  bands: !!python/tuple\n    - 2\n    - 4\ntraining:\n  lr: 1.0e-05\n  instruments:\n"
+                "  - vocals\n  - other\n  augmentation_type: null\n  note: 'a # in quotes'\ninference:\n  num_overlap: 8")
+    want = {"audio": {"chunk_size": 485100, "min_mean_abs": 0.0},
+            "model": {"dim": 384, "stereo": True, "flash_attn": True, "sample_rate": 44100, "stft_normalized": False,
+                      "sizes": [4096, 2048], "bands": [2, 4]},
+            "training": {"lr": 1e-05, "instruments": ["vocals", "other"], "augmentation_type": None, "note": "a # in quotes"},
+            "inference": {"num_overlap": 8}}
+    root = os.path.join(BASE, "noyaml")
+    os.makedirs(root, exist_ok=True)
+    cfg = os.path.join(root, "config.yaml")
+    open(cfg, "w", encoding="utf-8").write(cfg_text)
+    flow = os.path.join(root, "flow.yaml")
+    open(flow, "w", encoding="utf-8").write("model:\n  bands: [2, 4]\n")
+    code = ("import sys, json; sys.modules['yaml'] = None; sys.path.insert(0, sys.argv[1]); import build_roformer_onnx as B\n"
+            "print(json.dumps(B.load_yaml(sys.argv[2])))\n"
+            "try:\n    B.load_yaml(sys.argv[3]); print('NOT REFUSED')\nexcept B.ConfigError as e:\n    print('refused: %s' % e)\n")
+    r = subprocess.run([sys.executable, "-c", code, build_dir, cfg, flow], capture_output=True, text=True, timeout=120)
+    lines = (r.stdout or "").strip().splitlines()
+    got = json.loads(lines[0]) if r.returncode == 0 and lines else None
+    check("the converter reads a training config with PyYAML unavailable (RapReaper's Python has none), as PyYAML would",
+          got == want, (r.returncode, got, r.stderr[-400:]))
+    check("... and refuses what it does not read (a flow list) instead of guessing", len(lines) > 1 and lines[1].startswith("refused"),
+          lines)
+    try:
+        import yaml as _yaml
+    except ImportError:
+        _yaml = None
+    if _yaml is not None:
+        check("... the same result PyYAML gives on this config", _yaml.safe_load(cfg_text.replace("!!python/tuple", "")) == want)
+
+
 def scenario_intel_mac():
     """1.4.6: the Intel Mac package. Zip names, which zip suits which Mac, the Vocal Remover program's chip read from
     its Mach-O header, and an Apple-chip program refused (taken out of settings.json) on an Intel Mac."""
@@ -7404,10 +7574,14 @@ def scenario_intel_mac():
     print("\n--- Intel Macs (1.4.6) ---")
     src = os.path.dirname(HERE)
     saved = {k: os.environ.get(k) for k in ("RAPREAPER_PLATFORM", "RAPREAPER_MAC_CHIP")}
+    # (1.4.7) an earlier scenario in the same run may have imported the platform module already (as on Linux), and the
+    # installer would then get that one, not a Mac's: each load below gets its own, and the earlier one is put back
+    saved_pf = sys.modules.get("rapreaper_platform")
     os.environ["RAPREAPER_PLATFORM"] = "mac"
     try:
         def load(chip):
             os.environ["RAPREAPER_MAC_CHIP"] = chip
+            sys.modules.pop("rapreaper_platform", None)
             spec = _ilu.spec_from_file_location("rr_inst_intel_" + chip, os.path.join(src, "rapreaper_install.py"))
             mod = _ilu.module_from_spec(spec)
             spec.loader.exec_module(mod)
@@ -7461,6 +7635,8 @@ def scenario_intel_mac():
         env = dict(os.environ, HOME=home, RAPREAPER_PLATFORM="mac", RAPREAPER_MAC_CHIP="x86_64",
                    RAPREAPER_CLAUDE_CONFIG_DIRS=os.path.join(home, "Library", "Application Support", "Claude"),
                    REAPER_RESOURCE_PATH=os.path.join(home, "Library", "Application Support", "REAPER"))
+        for k in ("RAPREAPER_HOME", "RAPREAPER_BRIDGE_ROOT", "APPDATA", "LOCALAPPDATA", "USERPROFILE", "TMPDIR"):
+            env.pop(k, None)     # (1.4.7) left set by earlier scenarios in the same run (guards, ducks, privacy): not this Mac's
         os.makedirs(env["REAPER_RESOURCE_PATH"], exist_ok=True)
         r = subprocess.run([sys.executable, os.path.join(dist, "rapreaper_install.py"), "--no-pip", "--no-gpu-test"],
                            capture_output=True, text=True, env=env, cwd=dist, timeout=600)
@@ -7486,6 +7662,10 @@ def scenario_intel_mac():
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+        if saved_pf is not None:
+            sys.modules["rapreaper_platform"] = saved_pf
+        else:
+            sys.modules.pop("rapreaper_platform", None)
 
 SCENARIOS = {"protocol": scenario_protocol, "guards": scenario_guards, "main": scenario_main, "quiet": scenario_clean_quiet,
              "offline": scenario_offline, "nosws": scenario_no_sws, "gate": scenario_gate_closed,
@@ -7497,7 +7677,7 @@ SCENARIOS = {"protocol": scenario_protocol, "guards": scenario_guards, "main": s
              "fallbacks": scenario_fallbacks, "fixes": scenario_fixes, "ducks": scenario_ducks, "song_effects": scenario_song_effects, "privacy": scenario_privacy, "song_setup": scenario_song_setup, "hardening": scenario_hardening, "clips2": scenario_clips_restore, "export2": scenario_export2, "phones": scenario_phones, "levels": scenario_levels, "clarity": scenario_clarity, "aliases": scenario_aliases,
              "projects_fit": scenario_projects_and_fit, "disk_system": scenario_disk_and_system,
              "installer_mac": scenario_installer_mac_update, "remaster": scenario_remaster, "audit2": scenario_audit_round2,
-             "intel_mac": scenario_intel_mac}
+             "intel_mac": scenario_intel_mac, "nightly": scenario_nightly}
 
 if __name__ == "__main__":
     which = sys.argv[1:] or list(SCENARIOS)
