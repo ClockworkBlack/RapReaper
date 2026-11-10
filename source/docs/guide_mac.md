@@ -1,6 +1,6 @@
 # RapReaper Guide (Mac): mix rap vocals in REAPER with Claude
 
-RapReaper 1.4.6 · 9 November 2026
+RapReaper 1.4.6.1 · 9 November 2026
 
 RapReaper lets you mix rap vocals in REAPER by typing to Claude: Claude sets REAPER's own plug-ins in real units, measures the audio before and after, and tells you what each change did. RapReaper and your audio stay on your Mac. Claude itself is an online service, so you need the internet, and the text of the chat (never audio) goes to Anthropic.
 
@@ -527,7 +527,7 @@ Most problems are one of these. RapReaper's tools also say what is wrong in plai
 | "The open project has unsaved changes" when opening or closing a project | RapReaper never drops unsaved work on its own | Say whether to save first, drop the changes, or open the other project in a new tab. |
 | fit\_instrumental says the match is not clear | The two tracks do not hold the same music, or the overlap is short | Name a reference that really holds the same music (the old beat, or a vocal recorded over it), or move by a time instead. |
 | remaster finds only a project file | REAPER cannot open another program's project | Export the tracks as audio files as the answer describes, copy them into `kit\imports\<song>`, ask again. |
-| separate\_song or learn\_song\_effects says there is no way to separate | The model is not there yet, or the Vocal Remover is not allowed | Double-click Get Vocal Remover Model.bat (it downloads and builds the model), or put the eight `MelRoformer-KimFT2-int8.onnx.part...` files in Downloads and run Install RapReaper.command again; it joins them and allows the program. |
+| separate\_song or learn\_song\_effects says there is no way to separate | The model is not there yet, or the Vocal Remover is not allowed | Double-click Get Vocal Remover Model.command (it downloads and builds the model), or put the eight `MelRoformer-KimFT2-int8.onnx.part...` files in Downloads and run Install RapReaper.command again; it joins them and allows the program. |
 | The graphics test says "not enough memory" or "the parameter is incorrect" | The graphics chip or its driver cannot run the network | Nothing to fix: the Vocal Remover stays on the processor. A newer graphics driver sometimes helps; try the test again afterwards. |
 | The Vocal Remover's window does not open | The browser did not start | Copy the address shown in its black window (it starts with http://127.0.0.1) into any browser. |
 | "Set the final loudness" stops short of the target | Reaching it would take more than about 6 dB of limiting, which flattens a song | Usually leave it: streaming services turn loud songs down anyway. For a louder master, make the mix denser first ("heavier compression on the vocal"), or tell Claude to push harder regardless. |

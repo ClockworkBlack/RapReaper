@@ -44,7 +44,7 @@ import traceback
 import unicodedata
 import uuid
 
-VERSION = "1.4.6"
+VERSION = "1.4.6.1"
 
 HOME = os.path.abspath(os.environ.get("RAPREAPER_HOME") or os.path.dirname(os.path.abspath(__file__)))
 BRIDGE_ROOT = os.path.abspath(os.environ.get("RAPREAPER_BRIDGE_ROOT") or os.path.join(HOME, "reaper-daemon"))

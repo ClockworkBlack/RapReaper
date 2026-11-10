@@ -1,5 +1,5 @@
-RapReaper 1.4.6
-============
+RapReaper 1.4.6.1
+==============
 
 RapReaper's own files (rapreaper_install.py, kit/rapreaper_server.py, kit/rapreaper_audio.py, kit/rapreaper_music.py,
 kit/rapreaper_platform.py, kit/rapreaper_programs.py, kit/rapreaper_effects.py, kit/rapreaper_separate.py,

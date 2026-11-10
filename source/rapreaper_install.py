@@ -61,7 +61,7 @@ import unicodedata
 import zipfile
 import zlib
 
-VERSION = "1.4.6"
+VERSION = "1.4.6.1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 KIT = os.path.join(HERE, "kit")
 BRIDGE_ROOT = os.path.join(KIT, "reaper-daemon")

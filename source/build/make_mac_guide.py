@@ -127,6 +127,7 @@ WORDS = [
     ("Check RapReaper.bat", "Check RapReaper.command"), ("Uninstall RapReaper.bat", "Uninstall RapReaper.command"),
     ("Allow Vocal Remover.bat", "Allow Vocal Remover.command"), ("Allow ffmpeg.bat", "Allow ffmpeg.command"),
     ("Allow Transcriber.bat", "Allow Transcriber.command"), ("Get ffmpeg and Transcriber.bat", "Get ffmpeg and Transcriber.command"),
+    ("Get Vocal Remover Model.bat", "Get Vocal Remover Model.command"),
     ("`VocalRemover\\\\VocalRemover.exe`", "`VocalRemover/Vocal Remover.command`"),
     ("double-click `VocalRemover/Vocal Remover.command`, drop a song", "double-click `VocalRemover/Vocal Remover.command` (the first time: Open Anyway in System Settings > Privacy & Security, unless the installer has run already), drop a song"),
     ("Ctrl+Alt+Shift+S", "Cmd+Option+Shift+S"), ("Ctrl+Alt+Z", "Cmd+Option+Z"), ("Ctrl+", "Cmd+"), ("Alt+", "Option+"),
@@ -152,6 +153,8 @@ WORDS = [
     ("(it may be behind the ^ arrow)", ""),
     ("a slow PC", "a slow computer"), ("PC names, OneDrive names", "computer names, OneDrive and iCloud names"),
     ("Right-click the Claude icon near the clock  and choose Quit.", "Claude menu > Quit Claude."),
+    ("Quit Claude completely (right-click its icon near the clock > Quit) and open it again.",
+     "Quit Claude completely (Claude menu > Quit Claude, or Cmd+Q) and open it again."),
 ]
 
 

@@ -51,7 +51,7 @@ MAC_TOP = ["Install RapReaper.command", "Check RapReaper.command", "Update RapRe
 MAC_RENAMED = {"mac/README.txt": "README.txt", "mac/AUDIO INTERFACE SETUP.txt": "AUDIO INTERFACE SETUP.txt"}
 SHIP_DIRS = ["kit", "sim", "tests", "docs"]
 BUILD_FILES = ["build_release.py", "stamp_helper_hash.py", "build_guides.py", "make_mac_guide.py", "build_roformer_onnx.py",
-               "onnxwriter.py", "torch_ckpt.py", "eval_separation.py", "roformer_numpy.py", "eval.json"]
+               "onnxwriter.py", "torch_ckpt.py", "eval_separation.py", "roformer_numpy.py", "eval.json", "fetch_runtime.py"]
 EMPTY_DIRS = ["kit/state", "kit/captures", "kit/exports", "kit/logs", "kit/references", "kit/imports", "kit/chains/user", "kit/models",
               "kit/state/songs", "kit/state/edits", "kit/state/transcripts", "kit/reaper-daemon/logs",
               "VocalRemover/models", "VocalRemover/Output"]
