@@ -13,7 +13,23 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, ".."))
-LUA = os.environ.get("LUA") or shutil.which("lua5.4") or shutil.which("lua") or "lua"      # needs Lua 5.4
+
+
+def _lua_cmd():
+    """How to run the simulated REAPER's Lua 5.4: $LUA, a lua5.4 (or lua) on the PATH, or, when there is none, the
+    stand-in tests/lua54_standin.py on Lua 5.4 from the pip package "lupa" (pip install lupa)."""
+    found = os.environ.get("LUA") or shutil.which("lua5.4") or shutil.which("lua")
+    if found:
+        return [found]
+    try:
+        import lupa.lua54  # noqa: F401
+    except ImportError:
+        return ["lua"]                   # (fails with a plain "not found" when the simulated REAPER is started)
+    return [sys.executable, os.path.join(HERE, "lua54_standin.py")]
+
+
+LUA_CMD = _lua_cmd()
+LUA = LUA_CMD[0]
 
 sys.path.insert(0, os.path.join(ROOT, "kit"))
 sys.path.insert(0, os.path.join(ROOT, "sim"))
@@ -242,7 +258,7 @@ class Sandbox:
             if os.path.exists(os.path.join(self.sim, old)):
                 os.remove(os.path.join(self.sim, old))
         self.log = open(os.path.join(self.sim, "fake.log"), "ab")
-        cmd = [LUA, os.path.join(self.sim, "fake_reaper.lua"),
+        cmd = LUA_CMD + [os.path.join(self.sim, "fake_reaper.lua"),
                os.path.join(self.bridge_root, "bridge"), self.sim, pj, sys.executable]
         if getattr(self, "startup_script", None):
             cmd.append(self.startup_script)          # start the way REAPER does: by running Scripts/__startup.lua

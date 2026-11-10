@@ -200,9 +200,11 @@ end
 local function do_render()
   S.renders = S.renders + 1
   S.playing = 0                       -- REAPER stops playback when it renders
-  -- lets a test see the project as it is in the middle of a measurement
-  write_file(SIM_DIR .. "/rendering", tostring(S.renders))
+  -- lets a test see the project as it is in the middle of a measurement: the state first, then the mark, so that
+  -- while the mark is there the saved state always shows this render's project (with the mark first, a test on a
+  -- busy computer could read the state from before it in between -- 1.4.6.1)
   dump_state()
+  write_file(SIM_DIR .. "/rendering", tostring(S.renders))
   local ok_r, err_r = pcall(function()
   for _, n in ipairs(PROJECT.fail_renders or {}) do      -- test switch: this render fails
     if n == S.renders then error("fake REAPER: render number " .. n .. " failed (injected for a test)") end

@@ -1,6 +1,6 @@
 # RapReaper Guide (Windows): mix rap vocals in REAPER with Claude
 
-RapReaper 1.4.6 · 9 November 2026
+RapReaper 1.4.6.1 · 9 November 2026
 
 RapReaper lets you mix rap vocals in REAPER by typing to Claude: Claude sets REAPER's own plug-ins in real units, measures the audio before and after, and tells you what each change did. RapReaper and your audio stay on your PC. Claude itself is an online service, so you need the internet, and the text of the chat (never audio) goes to Anthropic.
 

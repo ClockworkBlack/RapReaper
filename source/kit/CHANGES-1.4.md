@@ -232,6 +232,18 @@ Versions: server, installer and helper 1.4.4 (the helper's only change is its ve
 
 Versions: server, installer and helper 1.4.5 (the helper's only change is its version line; `HELPER_WANTED_VERSION` is unchanged). The Vocal Remover is 2.0.2: the same code as 2.0.1, built with Go 1.27.3.
 
+## 1.4.6.1: the Vocal Remover's model getter (9 November 2026)
+
+| Problem met | Change |
+|---|---|
+| "Get Vocal Remover Model" (1.4.6) downloaded and checked the model's two source files and then stopped at the build: `build/build_roformer_onnx.py` imported PyYAML to read the model's `.yaml` settings, and RapReaper's Python (kit/venv on a Mac, the person's Python on Windows) has no PyYAML; the installer never installs it. It passed in testing only because the build machine had PyYAML. | The builder reads the settings file with a small reader of its own (block mappings, block lists, also at the key's indentation, plain values, comments, the `!!python/tuple` tag), which refuses anything else instead of guessing. On both published config files it gives exactly what PyYAML gives, and with PyYAML blocked the Kim FT2 model came out byte for byte the published file (f81d9265...). Scenario `model_config` reads a config with PyYAML unavailable. |
+| `Get Vocal Remover Model.bat` (1.4.6) had Unix line ends (LF only), unlike every other .bat file. Windows' cmd misreads such a batch file in places, labels and `goto` among them, which this one uses. | Windows line ends (CRLF), like the others; `get_model_kimft2.ps1` too. |
+| The Mac guide named the Windows model getter (`Get Vocal Remover Model.bat`). | `build/make_mac_guide.py` swaps in `Get Vocal Remover Model.command`; the guides are rebuilt. |
+| BUILDING.md in the 1.4.6 zips says to run `build/fetch_runtime.py` (the Vocal Remover's Microsoft libraries), which was in the GitHub source but not in the zips. | The release build packs it with the other build tools. |
+| The full end-to-end suite could not run for 1.4.6 (no Lua 5.4 on the build machine). | `tests/lua54_standin.py` runs the simulated REAPER on the Lua 5.4 of the pip package "lupa"; `tests/harness.py` uses it when no `lua5.4`/`lua` is on the PATH. Three checks that had not caught up with 1.4.6 are fixed (the simulator writes the project before its "rendering" mark; the Intel Mac scenario ignores state left by earlier scenarios; the imports check allows the `.keep` placeholder). |
+
+Versions: server, installer and helper 1.4.6.1 (version lines only). The Vocal Remover is unchanged at 2.0.3.
+
 ## 1.4.6: posting on GitHub, building it yourself, and Intel Macs (9 November 2026)
 
 | Problem met | Change |

@@ -6,13 +6,13 @@ RapReaper connects the Claude desktop app to REAPER on your own computer. You sa
 
 ## Download
 
-The latest version is **1.4.6**, released 9 November 2026. Pick the one for your computer:
+The latest version is **1.4.6.1**, released 9 November 2026. Pick the one for your computer:
 
 | Computer | Program | Guide |
 |---|---|---|
-| 🪟 **Windows** (64-bit) | [RapReaper-1.4.6-Windows.zip](https://github.com/ClockworkBlack/RapReaper/raw/main/Windows/RapReaper-1.4.6-Windows.zip) (29 MB) | [RapReaper Guide (Windows).pdf](Windows/RapReaper%20Guide%20%28Windows%29.pdf) |
-| 🍎 **Mac with an Apple chip** (M1 and later) | [RapReaper-1.4.6-Mac.zip](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac/RapReaper-1.4.6-Mac.zip) (19 MB) | [RapReaper Guide (Mac).pdf](Mac/RapReaper%20Guide%20%28Mac%29.pdf) |
-| 🍎 **Intel Mac** | [RapReaper-1.4.6-Mac-Intel.zip](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac-Intel/RapReaper-1.4.6-Mac-Intel.zip) (18 MB) | [RapReaper Guide (Mac).pdf](Mac-Intel/RapReaper%20Guide%20%28Mac%29.pdf) |
+| 🪟 **Windows** (64-bit) | [RapReaper-1.4.6.1-Windows.zip](https://github.com/ClockworkBlack/RapReaper/raw/main/Windows/RapReaper-1.4.6.1-Windows.zip) (29 MB) | [RapReaper Guide (Windows).pdf](Windows/RapReaper%20Guide%20%28Windows%29.pdf) |
+| 🍎 **Mac with an Apple chip** (M1 and later) | [RapReaper-1.4.6.1-Mac.zip](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac/RapReaper-1.4.6.1-Mac.zip) (19 MB) | [RapReaper Guide (Mac).pdf](Mac/RapReaper%20Guide%20%28Mac%29.pdf) |
+| 🍎 **Intel Mac** | [RapReaper-1.4.6.1-Mac-Intel.zip](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac-Intel/RapReaper-1.4.6.1-Mac-Intel.zip) (18 MB) | [RapReaper Guide (Mac).pdf](Mac-Intel/RapReaper%20Guide%20%28Mac%29.pdf) |
 
 Not sure which Mac you have? Apple menu > About This Mac: "Chip: Apple M…" means an Apple chip, "Processor: … Intel …" means an Intel Mac.
 
@@ -85,7 +85,7 @@ From 1.4.0 or newer:
 2. Double-click **Update RapReaper** (`.bat` on Windows, `.command` on a Mac) in your RapReaper folder. It checks the zip, replaces the program files, keeps your chains, settings, mix log, references, exports and model files, and runs the new installer.
 3. Close REAPER and start it again once.
 
-**Intel Mac on 1.4.5 or older:** the old updater doesn't know the Intel zip yet. Put both Mac zips in Downloads and double-click Update RapReaper.command twice: the first run updates to 1.4.6, the second swaps in the Intel Vocal Remover (the installer says so between the two).
+**Intel Mac on 1.4.5 or older:** the old updater doesn't know the Intel zip yet. Put both Mac zips in Downloads and double-click Update RapReaper.command twice: the first run updates to 1.4.6.1, the second swaps in the Intel Vocal Remover (the installer says so between the two).
 
 ## Privacy and safety
 
@@ -109,8 +109,8 @@ If you have the model's pieces from an earlier delivery (`MelRoformer-KimFT2-int
 
 ## Check your download
 
-- **Windows** (PowerShell, in the folder with the file): `Get-FileHash .\RapReaper-1.4.6-Windows.zip -Algorithm SHA256`
-- **Mac** (Terminal, in the folder with the file): `shasum -a 256 RapReaper-1.4.6-Mac.zip` (or `RapReaper-1.4.6-Mac-Intel.zip`)
+- **Windows** (PowerShell, in the folder with the file): `Get-FileHash .\RapReaper-1.4.6.1-Windows.zip -Algorithm SHA256`
+- **Mac** (Terminal, in the folder with the file): `shasum -a 256 RapReaper-1.4.6.1-Mac.zip` (or `RapReaper-1.4.6.1-Mac-Intel.zip`)
 
 The result must match the file's line in [SHA256SUMS.txt](SHA256SUMS.txt). The updater does this check by itself when that file is next to the zip.
 

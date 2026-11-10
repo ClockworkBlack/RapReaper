@@ -1,5 +1,5 @@
-RapReaper 1.4.6 - mix rap vocals in REAPER by talking to Claude (Mac)
-===================================================================
+RapReaper 1.4.6.1 - mix rap vocals in REAPER by talking to Claude (Mac)
+=====================================================================
 
 What this folder is
 -------------------
@@ -87,6 +87,17 @@ Updating
   programs, puts the replaced files in updates/, and runs the new version's installer. Then
   quit REAPER and start it again (the helper inside REAPER only loads at start; status
   reminds you until you do). (Terminal asks once for permission to read Downloads: allow it.)
+
+What changed in 1.4.6.1 (9 November 2026)
+------------------------------------------
+  Fixes for the Vocal Remover's model getter. "Get Vocal Remover Model.command" downloaded and checked
+  the model's two source files, then stopped at its last step on most computers: the model
+  builder needed the Python package PyYAML, which the installer never installs. It now reads
+  the model's settings file by itself, and the model still comes out byte for byte the
+  published file.
+  The Mac guide named the Windows file (.bat); it names Get Vocal Remover Model.command now.
+  Nothing else changes: the Vocal Remover is 2.0.3 as before, and the helper inside REAPER is
+  1.4.6.1 (one version line). Details in kit/CHANGES-1.4.md ("1.4.6.1").
 
 What changed in 1.4.6 (9 November 2026)
 ---------------------------------------

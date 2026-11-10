@@ -368,6 +368,12 @@ An independent audit, and what 1.4.1 changed (7 October 2026)
   - The Windows- and Mac-only parts (DLL loading, the .command files, CoreML/DirectML) were compiled and read, not
     run; the graphics-processor test answers on the person's own computer.
 
+What 1.4.6.1 changed (9 November 2026)
+--------------------------------------
+  - The model builder no longer imports PyYAML; it reads the model's .yaml settings file with a small reader of its
+    own that accepts only plain keys, values and lists, and refuses anything else. The built model is checked
+    against its published checksum as before. Nothing else that touches your computer changed.
+
 What 1.4.6 changed (9 November 2026)
 ------------------------------------
   - New downloads, both started only by the person (the "Get Vocal Remover Model" files, like "Get ffmpeg and

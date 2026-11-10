@@ -1,5 +1,5 @@
-RapReaper 1.4.6 - mix rap vocals in REAPER by talking to Claude (Windows)
-=======================================================================
+RapReaper 1.4.6.1 - mix rap vocals in REAPER by talking to Claude (Windows)
+=========================================================================
 
 What this folder is
 -------------------
@@ -74,6 +74,18 @@ Updating
   loads at start; status reminds you until you do).
   From 1.3.2 or older (no Update file yet): unzip the new zip over the old folder once,
   replacing files (nothing of yours is in the zip), then double-click Install RapReaper.bat.
+
+What changed in 1.4.6.1 (9 November 2026)
+------------------------------------------
+  Fixes for the Vocal Remover's model getter. "Get Vocal Remover Model.bat" downloaded and checked
+  the model's two source files, then stopped at its last step on most computers: the model
+  builder needed the Python package PyYAML, which the installer never installs. It now reads
+  the model's settings file by itself, and the model still comes out byte for byte the
+  published file.
+  "Get Vocal Remover Model.bat" also had line ends Windows' cmd can misread; it has
+  Windows' own now, like every other .bat file.
+  Nothing else changes: the Vocal Remover is 2.0.3 as before, and the helper inside REAPER is
+  1.4.6.1 (one version line). Details in kit\CHANGES-1.4.md ("1.4.6.1").
 
 What changed in 1.4.6 (9 November 2026)
 ---------------------------------------

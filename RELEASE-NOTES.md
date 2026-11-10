@@ -1,4 +1,4 @@
-# RapReaper 1.4.6 release notes
+# RapReaper 1.4.6.1 release notes
 
 Released 9 November 2026.
 
@@ -6,14 +6,24 @@ Released 9 November 2026.
 
 | Computer | Download | Size |
 |---|---|---|
-| 🪟 **Windows** (64-bit) | [**RapReaper-1.4.6-Windows.zip**](https://github.com/ClockworkBlack/RapReaper/raw/main/Windows/RapReaper-1.4.6-Windows.zip) and the [Windows guide](Windows/RapReaper%20Guide%20%28Windows%29.pdf) | 29 MB |
-| 🍎 **Mac with an Apple chip** | [**RapReaper-1.4.6-Mac.zip**](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac/RapReaper-1.4.6-Mac.zip) and the [Mac guide](Mac/RapReaper%20Guide%20%28Mac%29.pdf) | 19 MB |
-| 🍎 **Intel Mac** | [**RapReaper-1.4.6-Mac-Intel.zip**](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac-Intel/RapReaper-1.4.6-Mac-Intel.zip) and the [Mac guide](Mac-Intel/RapReaper%20Guide%20%28Mac%29.pdf) | 18 MB |
+| 🪟 **Windows** (64-bit) | [**RapReaper-1.4.6.1-Windows.zip**](https://github.com/ClockworkBlack/RapReaper/raw/main/Windows/RapReaper-1.4.6.1-Windows.zip) and the [Windows guide](Windows/RapReaper%20Guide%20%28Windows%29.pdf) | 29 MB |
+| 🍎 **Mac with an Apple chip** | [**RapReaper-1.4.6.1-Mac.zip**](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac/RapReaper-1.4.6.1-Mac.zip) and the [Mac guide](Mac/RapReaper%20Guide%20%28Mac%29.pdf) | 19 MB |
+| 🍎 **Intel Mac** | [**RapReaper-1.4.6.1-Mac-Intel.zip**](https://github.com/ClockworkBlack/RapReaper/raw/main/Mac-Intel/RapReaper-1.4.6.1-Mac-Intel.zip) and the [Mac guide](Mac-Intel/RapReaper%20Guide%20%28Mac%29.pdf) | 18 MB |
 | All | [**SHA256SUMS.txt**](SHA256SUMS.txt): checksums to check your download | under 1 KB |
 
 The zips aren't interchangeable. The Windows one has `.bat` double-click files and the Mac ones have `.command` files, and the updater refuses a zip for another system or another kind of Mac.
 
-## What's new in 1.4.6
+## What's new in 1.4.6.1
+
+A fix release for the Vocal Remover's model getter. Nothing else changes.
+
+- **"Get Vocal Remover Model" works on a normal computer.** In 1.4.6 it downloaded and checked the model's two source files, then stopped at its last step: the model builder needed the Python package PyYAML, which RapReaper's installer never installs (the test computer happened to have it). It now reads the model's settings file by itself, and the model still comes out byte for byte the published file.
+- **"Get Vocal Remover Model.bat" has Windows line endings.** In 1.4.6 it was the only .bat file with Unix line endings, which Windows' command prompt can misread.
+- **Small things:** the Mac guide named the Windows file (`.bat`) instead of `Get Vocal Remover Model.command`; the zips now include `build/fetch_runtime.py` (the Vocal Remover's Microsoft libraries), which `BUILDING.md` refers to; the guides are rebuilt for 1.4.6.1.
+
+The Vocal Remover program itself is unchanged (2.0.3), and so is everything else in RapReaper apart from the version lines. **Already on 1.4.6?** Put the 1.4.6.1 zip in Downloads and double-click Update RapReaper, then double-click Get Vocal Remover Model if you haven't got the model yet.
+
+## What was new in 1.4.6
 
 - **The Vocal Remover runs on Intel Macs.** The new Mac-Intel zip has the Vocal Remover built for Intel processors, with ONNX Runtime 1.23.2, the last version Microsoft built for Intel Macs (macOS 13 or newer). The Vocal Remover is now version 2.0.3; on Windows and Apple-chip Macs nothing changes.
 - **Get the model yourself.** **Get Vocal Remover Model** (`.bat` / `.command`) downloads the model's two source files from their author on Hugging Face, checks them, and builds the model in about a minute, byte for byte the published file. Model pieces still work.
@@ -21,9 +31,7 @@ The zips aren't interchangeable. The Windows one has `.bat` double-click files a
 - **Build it yourself.** The full source is in [`source/`](source), with `build/fetch_runtime.py` to get Microsoft's runtime libraries (each checked by SHA-256) and a GitHub Actions workflow that builds all three zips. See [`source/BUILDING.md`](source/BUILDING.md).
 - **The installer knows which Mac it's on.** It won't allow an Apple-chip Vocal Remover on an Intel Mac (RapReaper's own ONNX Runtime separates instead), and it tells you which zip to get. Update and Make Full Packages know the new zip name.
 
-**Intel Mac on 1.4.5:** the 1.4.5 updater doesn't know the Intel zip. Put both Mac zips in Downloads and double-click Update RapReaper.command twice: the first run updates to 1.4.6, the second swaps in the Intel Vocal Remover.
-
-The guide PDFs are still the 1.4.5 ones. Everything new is in this page, the README and `README.txt` inside the zip; the guides will be rebuilt with the next full test run.
+**Intel Mac on 1.4.5:** the 1.4.5 updater doesn't know the Intel zip. Put both Mac zips in Downloads and double-click Update RapReaper.command twice: the first run updates to 1.4.6.1, the second swaps in the Intel Vocal Remover.
 
 ## What was new in 1.4.5
 
@@ -80,18 +88,26 @@ After installing, double-click **Get Vocal Remover Model** (`.bat` or `.command`
 
 ## Check your download
 
-- **Windows** (PowerShell, in the folder with the file): `Get-FileHash .\RapReaper-1.4.6-Windows.zip -Algorithm SHA256`
-- **Mac** (Terminal, in the folder with the file): `shasum -a 256 RapReaper-1.4.6-Mac.zip` (or `RapReaper-1.4.6-Mac-Intel.zip`)
+- **Windows** (PowerShell, in the folder with the file): `Get-FileHash .\RapReaper-1.4.6.1-Windows.zip -Algorithm SHA256`
+- **Mac** (Terminal, in the folder with the file): `shasum -a 256 RapReaper-1.4.6.1-Mac.zip` (or `RapReaper-1.4.6.1-Mac-Intel.zip`)
 
 The result must match the file's line in `SHA256SUMS.txt`:
 
 ```
-282cfbc8b4f31cdfae272b70196a4c3da8e3c039d403fb718b418cce34cc5378  RapReaper-1.4.6-Mac-Intel.zip
-16a2e69f2c26495c6223b8439a86f6dcabe2d4a2a7ed9b254b6c11a7988cabde  RapReaper-1.4.6-Mac.zip
-8c91112b5cb0269a5193876db077eaa67a9fde8380f1fa566772878ef7b95b82  RapReaper-1.4.6-Windows.zip
+44d4d18fdac84efba1175316f0f5b98e1400819fb8a461f03f68e6ac5f4652ec  RapReaper-1.4.6.1-Mac-Intel.zip
+7137a0d65b2a07905b7d9ee29f0d38f635074247ed0117528700ef2e24b2be48  RapReaper-1.4.6.1-Mac.zip
+bc12cbe673528577539347f32d9a74f14cf204145fe1311d6626384820f2617e  RapReaper-1.4.6.1-Windows.zip
 ```
 
 ## How this release was tested
+
+What was run for 1.4.6.1:
+
+- **The bug, and the fix:** on a stand-in Windows profile with a Python that has NumPy and SciPy but no PyYAML (like most computers), "Get Vocal Remover Model" from the 1.4.6 zip stopped with "No module named 'yaml'". From the 1.4.6.1 zip it built the model with the published checksum, byte for byte.
+- **The whole test suite passed:** all 150 measuring-code checks and all 1,231 end-to-end checks, in all 46 scenarios, including a new one that reads the model's settings with PyYAML unavailable. It's the first full end-to-end run since 1.4.5. The simulated REAPER ran on the Lua inside the `lupa` Python package. Three checks that hadn't caught up with 1.4.6 were fixed first; they were problems in the tests, not in RapReaper.
+- **Updating from 1.4.6** was simulated with the shipped 1.4.6 zips on stand-in Windows, Mac and Intel Mac profiles. Each became 1.4.6.1, with the person's own chains, references and exports kept, and every installed file matched the 1.4.6.1 checksum list.
+- **The Vocal Remover program is the same file:** its programs and Microsoft's libraries in the three zips are byte for byte the 1.4.6 ones.
+- **No personal data:** every file of the three zips (programs and PDFs included) and the zips' own metadata were searched again. There are no names, e-mail addresses, folder paths, account names or keys of anyone's.
 
 What was run for 1.4.6:
 

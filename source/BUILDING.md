@@ -64,7 +64,8 @@ its public checkpoint, so it is used only when you already have the file.
 ## Testing
 
 `DEVELOPMENT.md` describes the test suites (`tests/test_audio.py`, about 3 minutes; `tests/e2e.py`, 1.5 to 2 hours,
-which needs Lua 5.4) and the rules that keep RapReaper safe.
+which needs Lua 5.4, or just `pip install lupa`: the tests then use `tests/lua54_standin.py`) and the rules that keep
+RapReaper safe.
 
 ## Building on GitHub
 

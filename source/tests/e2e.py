@@ -1565,7 +1565,7 @@ def scenario_installer():
 
     # A start-up script of the person's own that ends with a top-level 'return': Lua allows nothing after that,
     # so a block added at the end would stop the whole file from loading. The block goes first.
-    lua = os.environ.get("LUA") or shutil.which("lua5.4") or shutil.which("lua") or "lua"
+    from harness import LUA_CMD          # (a Lua 5.4 on the PATH, or the lupa stand-in: see harness.py)
     ends = b"local t = os.time()\nif t then return end\nreturn\n"
     e, st, cf = profile("p_return", startup_bytes=ends)
     rc, out = run_in(e)
@@ -1575,10 +1575,10 @@ def scenario_installer():
     open(helper, "w").write("local f = assert(io.open(arg[1], 'rb')); local s = f:read('a'); f:close()\n"
                             "local fn, err = load((arg[2] or '') .. s, 'startup', 't')\n"
                             "if not fn then io.stderr:write(tostring(err)); os.exit(3) end\nos.exit(0)\n")
-    comp = subprocess.run([lua, helper, st], capture_output=True, text=True, timeout=60)
+    comp = subprocess.run(LUA_CMD + [helper, st], capture_output=True, text=True, timeout=60)
     check("a startup script that ends with 'return': the block goes first and the file still compiles",
           rc == 0 and data == block + ends and comp.returncode == 0, (rc, comp.returncode, comp.stderr[-300:], data[-60:]))
-    bad_order = subprocess.run([lua, helper, st, ends.decode()], capture_output=True, text=True, timeout=60)
+    bad_order = subprocess.run(LUA_CMD + [helper, st, ends.decode()], capture_output=True, text=True, timeout=60)
     check("... (and the test can tell: the same block AFTER those lines does not compile)",
           bad_order.returncode == 3 and "near" in bad_order.stderr, (bad_order.returncode, bad_order.stderr[-200:]))
     old_layout = b"-- mine\nlocal y = 2\n" + block
@@ -4966,8 +4966,9 @@ def _song_effects_files(c, sb, refs):
     argv = open(os.path.join(fake_dir, "argv.txt")).read().strip().splitlines()
     check("the program writes into the job's own empty folder (not into imports), with ONNX Runtime's telemetry off",
           argv and "'--out', '%s" % os.path.join(sb.kit, "state", "sep") in argv[-1] and argv[-1].endswith("ORT=1"), argv[-1:])
+    # (".keep" is the placeholder every folder RapReaper fills has shipped with since 1.4.6; RapReaper never lists it)
     check("the job's working folder is cleared, and no side file is left among the music in imports",
-          os.listdir(os.path.join(sb.kit, "state", "sep")) == [] and all(n.endswith(".wav") for n in os.listdir(imps)),
+          os.listdir(os.path.join(sb.kit, "state", "sep")) == [] and all(n.endswith(".wav") for n in os.listdir(imps) if n != ".keep"),
           (os.listdir(os.path.join(sb.kit, "state", "sep")), sorted(os.listdir(imps))))
     jid = json.load(open(os.path.join(sb.kit, "state", "separate_job.json"))).get("id")
     ok, r = call(c, "separate_song", file="Night.wav")
@@ -7395,6 +7396,46 @@ def scenario_audit_round2():
 
 
 
+def scenario_model_config():
+    """1.4.6.1: the model builder reads the model's .yaml settings without PyYAML (which RapReaper never installs)."""
+    import subprocess
+    print("\n--- the Vocal Remover's model builds without PyYAML (1.4.6.1) ---")
+    build_dir = os.path.join(os.path.dirname(HERE), "build")
+    cfg_text = ("audio:\n  chunk_size: 485100\n  min_mean_abs: 0.000\n\nmodel:\n  dim: 384\n  stereo: true\n  flash_attn: True\n"
+                "  sample_rate: 44100  # needed for mel filter bank\n  stft_normalized: False\n  sizes: !!python/tuple\n"
+                "  - 4096\n  - 2048\n  bands: !!python/tuple\n    - 2\n    - 4\ntraining:\n  lr: 1.0e-05\n  instruments:\n"
+                "  - vocals\n  - other\n  augmentation_type: null\n  note: 'a # in quotes'\ninference:\n  num_overlap: 8")
+    want = {"audio": {"chunk_size": 485100, "min_mean_abs": 0.0},
+            "model": {"dim": 384, "stereo": True, "flash_attn": True, "sample_rate": 44100, "stft_normalized": False,
+                      "sizes": [4096, 2048], "bands": [2, 4]},
+            "training": {"lr": 1e-05, "instruments": ["vocals", "other"], "augmentation_type": None, "note": "a # in quotes"},
+            "inference": {"num_overlap": 8}}
+    root = os.path.join(BASE, "noyaml")
+    os.makedirs(root, exist_ok=True)
+    cfg = os.path.join(root, "config.yaml")
+    open(cfg, "w", encoding="utf-8").write(cfg_text)
+    flow = os.path.join(root, "flow.yaml")
+    open(flow, "w", encoding="utf-8").write("model:\n  bands: [2, 4]\n")
+    code = ("import sys, json; sys.modules['yaml'] = None; sys.path.insert(0, sys.argv[1]); import build_roformer_onnx as B\n"
+            "print(json.dumps(B.load_yaml(sys.argv[2])))\n"
+            "try:\n    B.load_yaml(sys.argv[3]); print('NOT REFUSED')\nexcept B.ConfigError as e:\n    print('refused: %s' % e)\n")
+    r = subprocess.run([sys.executable, "-c", code, build_dir, cfg, flow], capture_output=True, text=True, timeout=120)
+    lines = (r.stdout or "").strip().splitlines()
+    got = json.loads(lines[0]) if r.returncode == 0 and lines else None
+    check("the converter reads a training config with PyYAML unavailable (RapReaper's Python has none), as PyYAML would",
+          got == want, (r.returncode, got, r.stderr[-400:]))
+    check("... and refuses what it does not read (a flow list) instead of guessing", len(lines) > 1 and lines[1].startswith("refused"),
+          lines)
+    try:
+        import yaml as _yaml
+    except ImportError:
+        _yaml = None
+    if _yaml is not None:
+        check("... the same result PyYAML gives on this config", _yaml.safe_load(cfg_text.replace("!!python/tuple", "")) == want)
+
+
+
+
 def scenario_intel_mac():
     """1.4.6: the Intel Mac package. Zip names, which zip suits which Mac, the Vocal Remover program's chip read from
     its Mach-O header, and an Apple-chip program refused (taken out of settings.json) on an Intel Mac."""
@@ -7404,10 +7445,14 @@ def scenario_intel_mac():
     print("\n--- Intel Macs (1.4.6) ---")
     src = os.path.dirname(HERE)
     saved = {k: os.environ.get(k) for k in ("RAPREAPER_PLATFORM", "RAPREAPER_MAC_CHIP")}
+    # (1.4.6.1) an earlier scenario in the same run may have imported the platform module already (as on Linux), and the
+    # installer would then get that one, not a Mac's: each load below gets its own, and the earlier one is put back
+    saved_pf = sys.modules.get("rapreaper_platform")
     os.environ["RAPREAPER_PLATFORM"] = "mac"
     try:
         def load(chip):
             os.environ["RAPREAPER_MAC_CHIP"] = chip
+            sys.modules.pop("rapreaper_platform", None)
             spec = _ilu.spec_from_file_location("rr_inst_intel_" + chip, os.path.join(src, "rapreaper_install.py"))
             mod = _ilu.module_from_spec(spec)
             spec.loader.exec_module(mod)
@@ -7461,6 +7506,8 @@ def scenario_intel_mac():
         env = dict(os.environ, HOME=home, RAPREAPER_PLATFORM="mac", RAPREAPER_MAC_CHIP="x86_64",
                    RAPREAPER_CLAUDE_CONFIG_DIRS=os.path.join(home, "Library", "Application Support", "Claude"),
                    REAPER_RESOURCE_PATH=os.path.join(home, "Library", "Application Support", "REAPER"))
+        for k in ("RAPREAPER_HOME", "RAPREAPER_BRIDGE_ROOT", "APPDATA", "LOCALAPPDATA", "USERPROFILE", "TMPDIR"):
+            env.pop(k, None)     # (1.4.6.1) left set by earlier scenarios in the same run (guards, ducks, privacy): not this Mac's
         os.makedirs(env["REAPER_RESOURCE_PATH"], exist_ok=True)
         r = subprocess.run([sys.executable, os.path.join(dist, "rapreaper_install.py"), "--no-pip", "--no-gpu-test"],
                            capture_output=True, text=True, env=env, cwd=dist, timeout=600)
@@ -7486,6 +7533,10 @@ def scenario_intel_mac():
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+        if saved_pf is not None:
+            sys.modules["rapreaper_platform"] = saved_pf
+        else:
+            sys.modules.pop("rapreaper_platform", None)
 
 SCENARIOS = {"protocol": scenario_protocol, "guards": scenario_guards, "main": scenario_main, "quiet": scenario_clean_quiet,
              "offline": scenario_offline, "nosws": scenario_no_sws, "gate": scenario_gate_closed,
@@ -7497,7 +7548,7 @@ SCENARIOS = {"protocol": scenario_protocol, "guards": scenario_guards, "main": s
              "fallbacks": scenario_fallbacks, "fixes": scenario_fixes, "ducks": scenario_ducks, "song_effects": scenario_song_effects, "privacy": scenario_privacy, "song_setup": scenario_song_setup, "hardening": scenario_hardening, "clips2": scenario_clips_restore, "export2": scenario_export2, "phones": scenario_phones, "levels": scenario_levels, "clarity": scenario_clarity, "aliases": scenario_aliases,
              "projects_fit": scenario_projects_and_fit, "disk_system": scenario_disk_and_system,
              "installer_mac": scenario_installer_mac_update, "remaster": scenario_remaster, "audit2": scenario_audit_round2,
-             "intel_mac": scenario_intel_mac}
+             "intel_mac": scenario_intel_mac, "model_config": scenario_model_config}
 
 if __name__ == "__main__":
     which = sys.argv[1:] or list(SCENARIOS)
