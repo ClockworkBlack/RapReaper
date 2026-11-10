@@ -40,6 +40,10 @@ jobs:
           python tests/test_audio.py
 
       - name: End-to-end smoke tests (the real server against the simulated REAPER)
+        env:
+          # not the default /tmp: the installer rightly refuses a RapReaper folder there on a Mac, and the Mac
+          # scenarios install into a stand-in Mac home inside this folder (see source/DEVELOPMENT.md)
+          RAPREAPER_E2E_DIR: ${{ runner.temp }}/rapreaper_e2e
         run: |
           python -m pip install --only-binary=:all: "lupa==2.4"
           python tests/e2e.py protocol main offline installer intel_mac nightly
