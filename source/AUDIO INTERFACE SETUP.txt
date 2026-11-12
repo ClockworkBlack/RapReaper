@@ -108,7 +108,7 @@ Do this once, before installing RapReaper. It takes about 10 minutes.
   - Record 10 seconds of yourself rapping over silence, play it back. You should hear it in
     the middle (not only in one ear), with no crackles.
   - Then follow "Install" in README.txt. Once RapReaper is installed and your first take is in
-    a project, ask Claude:  Run the RapReaper self-test  and then  check my recording.
+    a project, ask your AI app:  Run the RapReaper self-test  and then  check my recording.
     RapReaper measures the take and tells you in plain words if the level, a one-sided input,
     hum, hiss or room echo needs fixing at the recording stage, whatever your interface.
 

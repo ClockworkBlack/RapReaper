@@ -11,8 +11,8 @@ the person listens. They cannot see tool results, so tell them what happened in 
 1. `status`. If `ready` is false, go through `to_do` with the person one item at a time and stop until it is
    ready. If status mentions the "offline" preference, run `fix_setup` (the self-test also switches it off itself);
    the same when status has `after_reaper_restart` (the preference would come back at REAPER's next start). If
-   `to_do` (or any answer, under `restart_claude`) says a newer RapReaper is installed than the one running, tell the
-   person first: quit Claude completely and open it again; nothing else helps until then. If status lists something under
+   `to_do` (or any answer, under `restart_ai_app`) says a newer RapReaper is installed than the one running, tell the
+   person first, in the words the answer gives (restart the AI app they are using); nothing else helps until then. If status lists something under
    `unfinished` (a self-test or a loudness job that was cut off), say so and offer to carry on with it.
    If `self_test` in the status says it has not been run with a real recording on this PC, run `self_test`
    once the project has audio in it, and read out any failed check with its fix.
@@ -25,8 +25,8 @@ the person listens. They cannot see tool results, so tell them what happened in 
 
 ## Tools that work in several calls
 
-Claude Desktop stops waiting for a tool after a while (about a minute, by most reports), so RapReaper keeps
-every call short and splits the long jobs.
+AI apps stop waiting for a tool after a while (about a minute in most of them), so RapReaper keeps every call
+short and splits the long jobs.
 
 - `self_test`, `master_loudness` (with `apply: true`) and `level_match` answer `finished: false` when there is more to do.
   Call the same tool again straight away **with the same arguments**, and keep doing that until the result
@@ -69,7 +69,7 @@ every call short and splits the long jobs.
 | "take the effect off" | `voice_effect` effect `remove` (with `which`, or all). Effect tracks stay; mute them with `set_track` or delete them in REAPER. |
 | "what plug-ins / packages do we have", "ReaPack" | `reapack_status`. RapReaper installs nothing; it says what is there and what to install by hand through Extensions > ReaPack. |
 | "same sound as last song", "do the ad-libs too" | Best: a fresh `vocal_chain` pass on that track (fitted to it). Quick: `list_chains`, `apply_chain` (it replaces the track's RapReaper chain), then `measure` and adjust thresholds. After `apply_chain`, a stage needs a new `plan` first. |
-| "what does RapReaper send to Claude / what does it keep", "set privacy to maximum", "stop keeping the log" | `privacy` (show; `set` with level, expire_days or activity_log). Read out `level`, `what_leaves_this_pc` and the activity log's place in one or two sentences. |
+| "what does RapReaper send to the AI / what does it keep", "set privacy to maximum", "stop keeping the log" | `privacy` (show; `set` with level, expire_days or activity_log). Read out `level`, `what_leaves_this_pc` and the activity log's place in one or two sentences. |
 | "save this song's setup", "remember how this song is set", "put the Rough Draft setup back" | `song_setup` with action `save` / `recall` and the song's working title. Save after a good `finish` or when the person likes the sound; recall needs the same track names, and the result lists tracks it did not find. Tell the person the setup stays on their PC. |
 | "compare it with this song" | `list_reference_files` (the person puts a WAV of the song in the `references` folder first), then `compare_to_reference`. Explain the differences in loudness and tone; do not chase the numbers blindly. |
 | "turn it off so I can compare" | `bypass` with plugin `all`, and `transport` to play. Switch it back on (`bypass` false) before balancing, mastering or exporting. |
@@ -158,8 +158,9 @@ their times and count; show the words only if the person asks (`show_words`).
 - Projects: `open_project` and `close_project` do what REAPER's own File menu does, and never drop unsaved
   changes unless the person chose that in this chat (`discard_changes`); `save_first` is REAPER's own Save to
   the project's own file. `fit_instrumental` moves clips only after a plan the person has seen (`apply: true`).
-- Privacy: everything in this chat (the person's words and every tool answer) goes to Anthropic; audio never
-  does. Keep it to what the task needs: call only the tools the request needs (no extra `status`,
+- Privacy: everything in this chat (the person's words and every tool answer) goes to whoever runs the AI model
+  of the app you are in (the company behind it; nobody, with RapReaper's Local AI or another model that runs on
+  this computer); audio never does. The instructions RapReaper gave at the start say which it is. Keep it to what the task needs: call only the tools the request needs (no extra `status`,
   `project_overview` or `self_test` "just to check"), use the short forms when they are enough
   (`project_overview` without `detail`, `track_details` with `plugin` for one plug-in, `mix_log` with a small
   `last`), ask for no personal details, and never ask for or repeat file paths. The answers already say
@@ -382,4 +383,4 @@ or check the maker's manual, rather than guessing.
 When `status` (or an export answer) says ffmpeg or the transcriber is not set up and the person wants MP3/M4A copies or the
 words checked: tell them to double-click `Get ffmpeg and Transcriber.bat` in the RapReaper folder once (it downloads the programs
 and a speech model, and prints two paths), then run `Allow ffmpeg.bat` and `Allow Transcriber.bat` and paste those paths, then
-restart Claude. You cannot allow a program for them, and you do not run or download anything yourself. Both are optional.
+restart the AI app. You cannot allow a program for them, and you do not run or download anything yourself. Both are optional.

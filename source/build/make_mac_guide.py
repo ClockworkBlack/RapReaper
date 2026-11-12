@@ -26,21 +26,21 @@ def replace_chapter(text, heading, body):
 
 
 WHAT_YOU_NEED = '''
-Five things, all free to install. Only REAPER (after its trial) and regular use of Claude cost money.
+Five things, all free to install. Only REAPER (after its trial) and regular use of an online AI app cost money; the Local AI is free.
 
 | What | Where to get it | Cost | Why |
 | --- | --- | --- | --- |
-| REAPER (the current version) | [reaper.fm/download.php](https://www.reaper.fm/download.php), the macOS download for your Mac (Apple Silicon or Intel) | Free for 60 days with every feature, then $60 for a personal licence | The recording program Claude controls. |
+| REAPER (the current version) | [reaper.fm/download.php](https://www.reaper.fm/download.php), the macOS download for your Mac (Apple Silicon or Intel) | Free for 60 days with every feature, then $60 for a personal licence | The recording program the AI controls. |
 | ReaPack, then the SWS extension through it | [reapack.com](https://reapack.com/) for ReaPack, REAPER's package installer; SWS then comes from inside REAPER | Free | SWS lets REAPER measure audio without pop-up windows. |
 | Python (3.12 or newer) | [python.org/downloads/macos](https://www.python.org/downloads/macos/), the "macOS 64-bit universal2 installer"; Homebrew's Python works too | Free | Runs RapReaper. Its maths packages go into RapReaper's own small environment inside the folder. |
-| Claude Desktop | [claude.com/download](https://claude.com/download) | The app is free. A paid plan is realistic for regular mixing: tool use eats the free allowance fast | Where you type. |
-| The RapReaper folder | The Mac zip that came with this guide, plus the model pieces (the files whose names contain `.onnx.part`) | Free | The connector: 57 tools, the measuring code, the bridge script for REAPER, RapReaper's own helper for clip edits, the Vocal Remover program with its neural networks (the pieces are its model file), and the engineering notes Claude works from. |
+| An AI app, or none | Any app that speaks MCP: Claude Desktop ([claude.com/download](https://claude.com/download)), ChatGPT's desktop app, LM Studio, Cursor, VS Code, Windsurf, Gemini CLI ... Or RapReaper's own **Local AI**: **Get Local AI.command** in the RapReaper folder downloads it (2.7 or 5.7 GB, once) | The online apps are free to install; a paid plan is realistic for regular mixing, as tool use eats a free allowance fast. The Local AI is free | Where you type. |
+| The RapReaper folder | The Mac zip that came with this guide, plus the model pieces (the files whose names contain `.onnx.part`) | Free | The connector: 57 tools, the measuring code, the bridge script for REAPER, RapReaper's own helper for clip edits, the Vocal Remover program with its neural networks (the pieces are its model file), and the engineering notes the AI works from. |
 
 Your audio interface or USB microphone works with REAPER as it is; on a Mac almost all of them need no driver. "AUDIO INTERFACE SETUP.txt" in the RapReaper folder sets it up step by step for any brand.
 '''
 
 SETUP = '''
-Do these once, in this order; allow about half an hour. The installer in step 7 checks Python, the folder, REAPER, SWS and Claude, and tells you what is missing.
+Do these once, in this order; allow about half an hour. The installer in step 7 checks Python, the folder, REAPER, SWS and your AI apps, and tells you what is missing.
 
 1. **Your interface.** Follow "AUDIO INTERFACE SETUP.txt" (REAPER pointed at it, a Mono input for the mic, gain to about -12 dB peaks). If it already records in another program on this Mac, most of that is done.
 2. **REAPER.** Download the macOS version for your Mac (Apple Silicon or Intel), drag it into Applications and start it once. Until you buy a licence it shows an evaluation notice at every start: wait a few seconds, then click the button to carry on. Quit REAPER.
@@ -50,24 +50,25 @@ Do these once, in this order; allow about half an hour. The installer in step 7 
    - Extensions > ReaPack > Browse packages. Type `SWS` in the Filter box, right-click **SWS/S&M extension** and choose Install, then click Apply. Restart REAPER when ReaPack asks.
    - Check: the installer in step 7 reports "SWS extension found", and RapReaper's status says SWS is installed. Quit REAPER.
 4. **Python.** On python.org/downloads/macos take the **macOS 64-bit universal2 installer** of the current Python 3 and click through it with the standard choices. The `python3` that macOS itself offers is only a stub for Apple's developer tools and is not used; RapReaper's `.command` files look for python.org's or Homebrew's Python (`brew install python` works too).
-5. **Claude Desktop.** Install it and sign in.
+5. **An AI app.** Install the one you want to use and start it once (Claude Desktop: sign in). Several are fine: the installer connects each one it finds. No AI app? Skip this step: RapReaper's own Local AI is step 7's alternative (see "Other AI apps and RapReaper's Local AI").
 6. **RapReaper.** Double-click the RapReaper zip in Downloads; it unpacks into a folder. Open it until you see **Install RapReaper.command**: the folder that holds it is the RapReaper folder. Move that folder into your home folder (in the Finder: Go > Home, or Cmd+Shift+H), so that it becomes `/Users/<your name>/RapReaper`. Leave the model pieces (`MelRoformer-KimFT2-int8.onnx.part1of8` and so on) in Downloads: the installer joins them.
-   - Not in Downloads, Desktop or Documents: macOS asks each program (Terminal, REAPER, Claude) for permission to use those folders, and a refused one fails silently. Not in iCloud Drive, Dropbox or Google Drive either: they move files.
+   - Not in Downloads, Desktop or Documents: macOS asks each program (Terminal, REAPER, your AI app) for permission to use those folders, and a refused one fails silently. Not in iCloud Drive, Dropbox or Google Drive either: they move files.
 7. **Run the installer.** In the RapReaper folder, double-click **Install RapReaper.command**. The first time, macOS says the file "cannot be opened" because it came from the internet: open System Settings > Privacy & Security, scroll down, click **Open Anyway**, and double-click it again. (Or: open Terminal, type `bash` and a space, drag the file into the window, press Return.) A Terminal window shows what it does.
+   - It adds RapReaper to every AI app it finds (Claude Desktop, ChatGPT's desktop app and Codex, Cursor, VS Code, Windsurf, LM Studio, Gemini CLI). With none of them installed, its list says to double-click **Get Local AI.command** (once) and then **Start Local AI.command**: RapReaper's own AI, on this Mac.
    - It ends with **ALL SET**, or with **NOT FINISHED YET** and a short list of things to do. Do the list and run it again. It is safe to run as often as you like. After this first run, every RapReaper `.command` file opens by double-click: the installer releases them (and the Vocal Remover's files) from the download quarantine after checking each against the package's manifest.
    - Terminal asks once for permission to read your Downloads folder (for the model pieces): allow it.
    - With REAPER closed, it also switches off the one REAPER preference RapReaper cannot work with ("Set media items offline when application is not active"), keeping a copy of the settings file; with REAPER open, the self-test does that instead.
    - Its last step sets up the Vocal Remover: it checks the program against the package's manifest, allows it for RapReaper, joins the model pieces into `VocalRemover/models` (each checked against its published checksum) and then offers the graphics-processor test (a few minutes; see "Instrumentals from a song"). You can say no and run the test later from the Vocal Remover's window.
-8. **Restart Claude completely.** Claude menu > Quit Claude (or Cmd+Q), then open Claude again. Closing the window is not enough.
+8. **Restart your AI app completely.** Claude: Claude menu > Quit Claude (or Cmd+Q), then open Claude again; closing the window is not enough. Other apps: quit them (Cmd+Q) and open them again. The Local AI: double-click **Start Local AI.command**; your browser opens its chat window.
 9. **Start REAPER** and open or create a project. Save it once (Cmd+S). Give REAPER about a minute before the next step: the bridge starts after the evaluation notice, and after a quick quit-and-reopen of REAPER it waits a full minute. A small window with the words BRIDGE\\_ALREADY\\_RUNNING during that minute is harmless: close it.
-10. **Run the self-test.** In a new Claude chat, type: `Run the RapReaper self-test`
-    - The first time Claude uses each RapReaper tool it asks permission. Choose **Always allow** to stop the question for that tool, or Allow once to be asked every time.
-    - Claude runs the test in several short steps and then lists the checks. You may hear a faint beep. The test adds one muted track called "RapReaper self-test"; delete it afterwards if you like (right-click the track > Remove tracks).
-11. **Read the result.** Every line should say PASS. A line that says FAIL names what was measured and comes with its fix: do the fix and ask Claude to run the test again.
+10. **Run the self-test.** In a new chat in your AI app, type: `Run the RapReaper self-test`
+    - The first time the app uses each RapReaper tool it asks permission (the Local AI asks every time unless you choose Always allow). Choose **Always allow** to stop the question for that tool, or Allow once to be asked every time.
+    - The AI runs the test in several short steps and then lists the checks. You may hear a faint beep. The test adds one muted track called "RapReaper self-test"; delete it afterwards if you like (right-click the track > Remove tracks).
+11. **Read the result.** Every line should say PASS. A line that says FAIL names what was measured and comes with its fix: do the fix and ask the AI to run the test again.
 
-The installer needs no administrator password. It makes RapReaper's own small Python environment inside the folder (`kit/venv`) and puts NumPy and SciPy there, plus two optional packages when they can be fetched (lameenc for MP3 copies of exports, ONNX Runtime so RapReaper can run the separation networks itself when the Vocal Remover program is not allowed); the Mac's own Python is left as it is. Outside the folder it changes two files: REAPER's startup script (`~/Library/Application Support/REAPER/Scripts/__startup.lua`: two short marked blocks, one starts the bridge, the other notes each REAPER start and starts RapReaper's own small helper) and Claude's settings file (`~/Library/Application Support/Claude/claude_desktop_config.json`: one "rapreaper" entry). It keeps a dated copy of both files before changing them.
+The installer needs no administrator password. It makes RapReaper's own small Python environment inside the folder (`kit/venv`) and puts NumPy and SciPy there, plus two optional packages when they can be fetched (lameenc for MP3 copies of exports, ONNX Runtime so RapReaper can run the separation networks itself when the Vocal Remover program is not allowed); the Mac's own Python is left as it is. Outside the folder it changes two files: REAPER's startup script (`~/Library/Application Support/REAPER/Scripts/__startup.lua`: two short marked blocks, one starts the bridge, the other notes each REAPER start and starts RapReaper's own small helper) and the MCP settings of each AI app it finds (one "rapreaper" entry each; Claude's is `~/Library/Application Support/Claude/claude_desktop_config.json`). It keeps a dated copy of each file before changing it.
 
-To see RapReaper inside Claude, click the + in the chat box and open Connectors: "rapreaper" should be listed.
+To see RapReaper inside Claude, click the + in the chat box and open Connectors: "rapreaper" should be listed. Other apps list it among their MCP servers or tools.
 '''
 
 UPDATING = '''
@@ -77,13 +78,13 @@ When a new RapReaper zip comes, download it into Downloads (with any new model p
 '''
 
 KEEPING = '''
-RapReaper itself uses nothing online (Claude does), so it keeps working until something around it changes. When that happens, run the installer and the self-test again.
+RapReaper itself uses nothing online (an online AI app does), so it keeps working until something around it changes. When that happens, run the installer and the self-test again.
 
 | When | Do this |
 | --- | --- |
 | A new RapReaper zip | Put it in Downloads, double-click Update RapReaper.command, then restart REAPER. |
-| REAPER updates | Ask Claude to run the self-test, with a recording in the project. Control names and the way REAPER renders can change between versions, and the test catches both. |
-| Claude Desktop updates | If the RapReaper tools vanish, run Install RapReaper.command again. If Claude asks permission again, choose Always allow. |
+| REAPER updates | Ask the AI to run the self-test, with a recording in the project. Control names and the way REAPER renders can change between versions, and the test catches both. |
+| Your AI app updates | If the RapReaper tools vanish, run Install RapReaper.command again. If the app asks permission again, choose Always allow. |
 | macOS updates | Usually nothing. If a `.command` file is refused again, allow it once more in System Settings > Privacy & Security. |
 | You install a new Python | Run Install RapReaper.command again; it rebuilds RapReaper's own environment with it. |
 | You move the RapReaper folder | Run Install RapReaper.command again from the new place (keep it in your home folder). |
@@ -94,32 +95,46 @@ RapReaper itself uses nothing online (Claude does), so it keeps working until so
 
 Housekeeping is automatic. `kit/captures` holds the measurement files: RapReaper keeps the newest ones, about 1.5 GB at most, plus those your vocal sessions of the last 45 days still need for their before/after tables, and removes measurement files, vocal-session notes and the activity log older than 30 days. You may empty `kit/captures` at any time; the next vocal step then asks for a fresh plan. Exports and imports are yours to move or delete.
 
-For comfort, create a Project called "Mixing" in Claude and start your sessions there, so the chats stay together.
+For comfort, in Claude create a Project called "Mixing" and start your sessions there, so the chats stay together (other apps have their own ways to keep chats together).
 '''
 
 # rows of the troubleshooting table that differ on a Mac: (Windows row start, Mac row)
 TROUBLE_ROWS = {
     '| The installer says the tool server "did not answer properly" or took long |':
         '| The installer says the tool server "did not answer properly" or took long | The first start after an install, while the maths library loads | Run Install RapReaper.command once more; the second start is quick. If it happens again, the installer has saved the exact answer in `kit/state/installer_selfcheck.json`: send that file to whoever helps you (it holds no paths or names). |',
-    '| Claude has no RapReaper tools |':
-        '| Claude has no RapReaper tools | Claude was not fully quit, or an update reset its settings | Quit Claude (Claude menu > Quit Claude, Cmd+Q) and reopen it. Still missing: run Install RapReaper.command again. |',
+    '| Your AI app has no RapReaper tools |':
+        '| Your AI app has no RapReaper tools | The app was not fully quit, it was installed after RapReaper, or an update reset its settings | Quit the app completely (Cmd+Q) and reopen it. Still missing: run Install RapReaper.command again; it connects every AI app it finds. |',
     '| The installer says Python is missing or unsuitable |':
         '| The installer says Python is missing or unsuitable, or a `.command` file says "no Python 3.12" | Only Apple\'s stub `python3` is present, or Python is older than 3.12 | Install Python from python.org (set-up step 4) or with Homebrew, then double-click the installer again. |',
     '| The voice is in one ear only |':
         '| "cannot be opened because it is from an unidentified developer", or a `.command` file does nothing | macOS\'s download quarantine | System Settings > Privacy & Security, scroll down, Open Anyway; then double-click again. After the installer has run once, it releases every RapReaper file it shipped. |\n'
         '| The installer refuses the folder | The RapReaper folder is in Downloads, Desktop, Documents or a cloud folder | Move it to your home folder (`/Users/<your name>/RapReaper`) and run the installer again. |\n'
-        '| REAPER or Claude cannot see a file | macOS has not given that program permission for a folder | Keep everything inside the RapReaper folder in your home folder; System Settings > Privacy & Security > Files and Folders shows what each program may read. |\n'
+        '| REAPER or your AI app cannot see a file | macOS has not given that program permission for a folder | Keep everything inside the RapReaper folder in your home folder; System Settings > Privacy & Security > Files and Folders shows what each program may read. |\n'
         '| The voice is in one ear only | The mic was recorded on a stereo input | Click the clip, press F2 and set Channel mode to Mono (left) or Mono (right), whichever side has the voice. Record new takes on a Mono input. |',
 }
 
-LOGS = '''For deeper digging, Claude keeps a log for RapReaper called `mcp-server-rapreaper.log`. In Claude, Help > Troubleshooting > Show Logs opens its folder: `~/Library/Logs/Claude`. RapReaper's own record of what it sent is `kit/logs/sent_to_claude.log`.'''
+LOGS = '''For deeper digging, Claude keeps a log for RapReaper called `mcp-server-rapreaper.log`. In Claude, Help > Troubleshooting > Show Logs opens its folder: `~/Library/Logs/Claude`. Other apps show their MCP logs in their own settings; the Local AI's is `kit/state/local_ai/llama-server.log`. RapReaper's own record of what it sent is `kit/logs/sent_to_ai.log`.'''
 
-GPU_MAC = '''**The graphics processor.** On a Mac this is CoreML, which runs the network on the graphics processor and the Neural Engine of Apple Silicon. The Vocal Remover tests it before using it: "Test the graphics processor" in its window (the installer offers the same test at the end) runs one 8-second window through the network on the processor and through CoreML, compares the two results and times them. It switches CoreML on only when it works and is faster, and remembers that in `VocalRemover/settings.json`; RapReaper follows the same setting when it starts the program for Claude. If CoreML fails in the middle of a song, the song is finished on the processor and the result says so. The graphics-processor model is a float16 copy that the program makes from the processor model once (460 MB in `VocalRemover/models`, nothing downloaded), and its checksum is checked like every other model file. `python3 rapreaper_install.py --gpu on` additionally makes RapReaper's own ONNX Runtime ask for CoreML when it separates without the program. The Vocal Remover runs on Apple Silicon Macs (M1 and later) with macOS 14 or newer; on an Intel Mac RapReaper separates with its own ONNX Runtime on the processor.'''
+GPU_MAC = '''**The graphics processor.** On a Mac this is CoreML, which runs the network on the graphics processor and the Neural Engine of Apple Silicon. The Vocal Remover tests it before using it: "Test the graphics processor" in its window (the installer offers the same test at the end) runs one 8-second window through the network on the processor and through CoreML, compares the two results and times them. It switches CoreML on only when it works and is faster, and remembers that in `VocalRemover/settings.json`; RapReaper follows the same setting when it starts the program for the AI. If CoreML fails in the middle of a song, the song is finished on the processor and the result says so. The graphics-processor model is a float16 copy that the program makes from the processor model once (460 MB in `VocalRemover/models`, nothing downloaded), and its checksum is checked like every other model file. `python3 rapreaper_install.py --gpu on` additionally makes RapReaper's own ONNX Runtime ask for CoreML when it separates without the program. The Vocal Remover runs on Apple Silicon Macs (M1 and later) with macOS 14 or newer; on an Intel Mac RapReaper separates with its own ONNX Runtime on the processor.'''
 
 SOURCES_PY = '''- Python: [macOS downloads](https://www.python.org/downloads/macos/), [using Python on a Mac](https://docs.python.org/3/using/mac.html), [NumPy on PyPI](https://pypi.org/project/numpy/), [SciPy on PyPI](https://pypi.org/project/scipy/)'''
 
 WORDS = [
-    ("# RapReaper Guide (Windows): mix rap vocals in REAPER with Claude", "# RapReaper Guide (Mac): mix rap vocals in REAPER with Claude"),
+    ("# RapReaper Guide (Windows): mix rap vocals in REAPER with an AI", "# RapReaper Guide (Mac): mix rap vocals in REAPER with an AI"),
+    ("Get Local AI.bat", "Get Local AI.command"), ("Start Local AI.bat", "Start Local AI.command"),
+    ("`.codex\\config.toml`", "`~/.codex/config.toml`"), ("`.lmstudio\\mcp.json`", "`~/.lmstudio/mcp.json`"),
+    ("`.gemini\\settings.json`", "`~/.gemini/settings.json`"), ("`LocalAI\\README.txt`", "`LocalAI/README.txt`"),
+    ("`LocalAI\\runtime`", "`LocalAI/runtime`"),
+    ("(MIT licence, 38 MB)", "(MIT licence, about 15 MB)"),
+    ("the 4B (2.7 GB) on most PCs, or the 9B (5.7 GB) if your PC has 16 GB of memory and you choose it",
+     "the 4B (2.7 GB), or the 9B (5.7 GB), the default on a Mac with an Apple chip and 16 GB of memory or more"),
+    ("Without a good graphics card the first answer of a chat can take a few minutes, because the model first reads RapReaper's tool descriptions; later answers come faster, and the 4B model is the quicker one.",
+     "On an Apple chip it runs on the chip's graphics part; on an Intel Mac the first answer of a chat can take a few minutes, because the model first reads RapReaper's tool descriptions. Later answers come faster, and the 4B model is the quicker one."),
+    ("Three programs on your PC, and the AI.", "Three programs on your Mac, and the AI."),
+    ("(Claude: right-click its icon near the clock) and reopen it", "(Cmd+Q) and reopen it"),
+    ("Quit the app completely (Claude: right-click its icon near the clock > Quit) and open it again; the Local AI",
+     "Quit the app completely (Cmd+Q) and open it again; the Local AI"),
+    ("| A model on your PC without a strong graphics card |", "| An Intel Mac, or little memory |"),
     ("This is the Windows guide. The Mac version of RapReaper has its own guide with the same chapters.",
      "This is the Mac guide. The Windows version of RapReaper has its own guide with the same chapters."),
     ("Three programs on your PC, one service outside.", "Three programs on your Mac, one service outside."),

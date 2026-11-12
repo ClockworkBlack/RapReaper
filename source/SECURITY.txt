@@ -368,6 +368,53 @@ An independent audit, and what 1.4.1 changed (7 October 2026)
   - The Windows- and Mac-only parts (DLL loading, the .command files, CoreML/DirectML) were compiled and read, not
     run; the graphics-processor test answers on the person's own computer.
 
+What 1.5.0 (nightly) changed (12 November 2026)
+-----------------------------------------------
+  Since 1.5.0 RapReaper serves any AI app that speaks MCP, not only Claude Desktop: where this file says Claude or
+  Anthropic, read "the AI app" and "whoever runs its model" (answers now name both; with RapReaper's Local AI the
+  model runs on this computer and nothing of the chat leaves it).
+  - New writes outside the RapReaper folder, by the installer only: one "rapreaper" entry in the MCP settings file of
+    each AI app it finds (Claude Desktop; ChatGPT's desktop app and Codex: ~/.codex/config.toml; Cursor; VS Code and
+    VS Code Insiders; Windsurf; LM Studio; Gemini CLI). Each file is copied next to itself first and written in one
+    step. JSON files are read and written whole (as for Claude since 1.0); a file with comments (VS Code and Gemini
+    allow them) is never rewritten. config.toml is edited as text and read back with Python's own TOML reader:
+    unless every other setting reads exactly as before and RapReaper's entry exactly as meant, nothing is written.
+    Uninstall takes the entry out of every one of those files. RAPREAPER_AI_HOME confines all of it to a stand-in
+    folder in the tests, so a test run never touches the AI apps of the computer it runs on.
+  - The tool server has no new reads or writes. It notes the app's name from the MCP handshake (clientInfo) for the
+    wording of its answers; the name is matched against a list or, for an unknown app, used only when it is a short
+    plain title; it is never used as a path or a command. The activity log is now kit/logs/sent_to_ai.log; files of
+    1.4 (sent_to_claude*.log) are counted, swept and cleared with it.
+  - Published tool schemas are simplified for the strictest apps (one type per option, no
+    "additionalProperties: false"); every argument is still checked against the full schema by RapReaper itself,
+    so nothing that was refused before is accepted now, and an unknown option is still dropped with a note or
+    refused as a misspelling. RAPREAPER_TOOLS=core lists 28 tools (the others are not listed, and no app calls them).
+  - RapReaper's Local AI. "Get Local AI" is a separate script the person starts (like the other Get files): it
+    downloads one pinned llama.cpp release archive (b12250, from github.com/ggml-org/llama.cpp) and one pinned model
+    file (Qwen 3.5, from a fixed revision on huggingface.co), checks each against its SHA-256 written in the script,
+    deletes a file that does not match, and unpacks llama.cpp into LocalAI/runtime. "Start Local AI" (the installer's
+    --local-ai) starts llama-server only when every file in LocalAI/runtime is listed in LocalAI/runtime-b12250.json
+    with its SHA-256 (that list ships in the zip, so the zip's own manifest covers it) and no other file lies there:
+    llama.cpp loads the ggml libraries it finds next to it, so a planted library would otherwise run (only the
+    .DS_Store, Thumbs.db and desktop.ini files Finder and Explorer leave in an opened folder are let through, as
+    plain files under exactly those names; nothing loads them). The model is checked against its published checksum
+    (once per file size and date). llama-server is bound to 127.0.0.1; with
+    MCP servers configured it refuses requests from other web pages (its own Host check against DNS rebinding and
+    Origin check against cross-site requests, including the "simple" ones browsers send without asking) and refuses
+    to start on any other address without an API key. Its chat window asks the person before every tool call. It
+    starts RapReaper's tool server with the core tools, exactly as written in kit/state/local_ai/mcp.json.
+  - RapReaper's own Python still has no network code: the launcher starts a program and opens the browser with
+    Python's webbrowser module, and finds a free port by trying the next one when llama-server says it is taken.
+  - A small local model is easier to mislead than a large one. The defences do not depend on the model: names are
+    data in the instructions and the short playbook, anything that removes or silences audio needs a plan and then
+    apply/confirm, every change is one undo step, cuts keep restore points, and nothing is saved without the
+    person's word; the chat window's question before each tool call is the person's own check.
+  - Not run here: the real llama.cpp program and the real model (the build environment does not run programs
+    downloaded from the internet). Tested instead: llama.cpp's MCP client's handshake and calls as written in its
+    source (protocol 2024-11-05, clientInfo "llama.cpp"), a stand-in llama-server for the launcher (ports, the
+    processor fallback, refused files), and the pinned checksums of every archive and model, computed here from the
+    downloaded files.
+
 What 1.4.7 (nightly) changed (9 November 2026)
 ----------------------------------------------
   - One new file write outside the RapReaper folder: fix_setup (and the self-test, which uses it) now also writes

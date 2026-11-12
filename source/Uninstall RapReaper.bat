@@ -1,7 +1,7 @@
 @echo off
 title RapReaper uninstall
 cd /d "%~dp0"
-echo This disconnects RapReaper from REAPER and from Claude. It does not delete this folder,
+echo This disconnects RapReaper from REAPER and from your AI apps. It does not delete this folder,
 echo your REAPER projects, or anything else.
 echo.
 pause

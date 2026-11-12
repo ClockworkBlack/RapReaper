@@ -44,19 +44,20 @@ SIZE_LIMIT = 29 * 1024 * 1024          # one delivered file must stay under this
 COMMON_TOP = ["LICENSE.txt", "SECURITY.txt", "NOTICE.txt", "DEVELOPMENT.md", "BUILDING.md", "rapreaper_install.py"]
 WINDOWS_TOP = ["README.txt", "AUDIO INTERFACE SETUP.txt", "Install RapReaper.bat", "Check RapReaper.bat", "Update RapReaper.bat", "Make Full Packages.bat",
                "Uninstall RapReaper.bat", "Allow Vocal Remover.bat", "Allow ffmpeg.bat", "Allow Transcriber.bat",
-               "Get ffmpeg and Transcriber.bat", "get_tools_b5130.ps1", "Get Vocal Remover Model.bat", "get_model_kimft2.ps1"]
+               "Get ffmpeg and Transcriber.bat", "get_tools_b5130.ps1", "Get Vocal Remover Model.bat", "get_model_kimft2.ps1",
+               "Get Local AI.bat", "get_local_ai.ps1", "Start Local AI.bat"]
 MAC_TOP = ["Install RapReaper.command", "Check RapReaper.command", "Update RapReaper.command", "Make Full Packages.command", "Uninstall RapReaper.command",
            "Allow Vocal Remover.command", "Allow ffmpeg.command", "Allow Transcriber.command", "Get ffmpeg and Transcriber.command",
-           "Get Vocal Remover Model.command"]
+           "Get Vocal Remover Model.command", "Get Local AI.command", "Start Local AI.command"]
 MAC_RENAMED = {"mac/README.txt": "README.txt", "mac/AUDIO INTERFACE SETUP.txt": "AUDIO INTERFACE SETUP.txt"}
-SHIP_DIRS = ["kit", "sim", "tests", "docs"]
+SHIP_DIRS = ["kit", "sim", "tests", "docs", "LocalAI"]
 BUILD_FILES = ["build_release.py", "stamp_helper_hash.py", "build_guides.py", "make_mac_guide.py", "build_roformer_onnx.py",
                "onnxwriter.py", "torch_ckpt.py", "eval_separation.py", "roformer_numpy.py", "eval.json", "fetch_runtime.py"]
 EMPTY_DIRS = ["kit/state", "kit/captures", "kit/exports", "kit/logs", "kit/references", "kit/imports", "kit/chains/user", "kit/models",
               "kit/state/songs", "kit/state/edits", "kit/state/transcripts", "kit/reaper-daemon/logs",
-              "VocalRemover/models", "VocalRemover/Output"]
+              "VocalRemover/models", "VocalRemover/Output", "LocalAI/runtime", "LocalAI/models"]
 EXCLUDE_DIR_NAMES = {"__pycache__", ".git", "dist", ".pytest_cache", "inbox", "outbox", "processing", "archive", "failed", "venv"}
-EXCLUDE_FILE_RE = re.compile(r"(\.pyc$|\.wav$|\.mp3$|\.m4a$|\.flac$|\.onnx(\.part\d*)?$|\.npy$|^ggml.*\.bin$|\.log$|\.tmp$|\.broken-|"
+EXCLUDE_FILE_RE = re.compile(r"(\.pyc$|\.wav$|\.mp3$|\.m4a$|\.flac$|\.onnx(\.part\d*)?$|\.npy$|^ggml.*\.bin$|\.log$|\.tmp$|\.broken-|\.gguf$|\.part$|"
                              r"\.rapreaper-backup-|^\.DS_Store$|^Thumbs\.db$|^settings\.json$|^private_names\.txt$|^install\.json$)", re.I)
 KEEP_FILES = {"tests/data/real_speech.wav"}      # the one audio file that is part of the tests
 
@@ -344,7 +345,8 @@ def write_zip(out_path, files):
 def check_zip(path):
     with zipfile.ZipFile(path) as z:
         names = z.namelist()
-        bad = [n for n in names if re.search(r"settings\.json$|private_names|mix_log|journal\.json|sent_to_claude|\.wav$|\.onnx$|install\.json$", n)
+        bad = [n for n in names if re.search(r"settings\.json$|private_names|mix_log|journal\.json|sent_to_claude|sent_to_ai|\.wav$|\.onnx$|"
+                                             r"\.gguf$|install\.json$|local_ai/|ai_app_settings", n)
                and not n.endswith("tests/data/real_speech.wav")]
         if bad:
             fail("personal or working files in %s: %s" % (os.path.basename(path), bad[:5]))

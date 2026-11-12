@@ -61,6 +61,17 @@ way. Model pieces (`MelRoformer-KimFT2-int8.onnx.part1of8` ...) from an earlier 
 The optional BS-Roformer model (the "Two networks" and BS-Roformer modes) cannot yet be rebuilt byte for byte from
 its public checkpoint, so it is used only when you already have the file.
 
+## RapReaper's Local AI
+
+The Local AI (1.5.0) is not in the zips either: llama.cpp's llama-server and the Qwen 3.5 model are downloaded on
+the person's computer by **Get Local AI** (`get_local_ai.ps1` on Windows, `Get Local AI.command` on a Mac), from
+llama.cpp's release b12250 on GitHub and from a fixed revision of unsloth's GGUF files of Qwen 3.5 on Hugging Face,
+each checked against the SHA-256 written in those scripts. `LocalAI/runtime-b12250.json` lists every file of the
+three llama.cpp archives (Windows Vulkan, Mac Apple chip, Mac Intel) with its SHA-256; Start Local AI starts
+llama-server only when `LocalAI/runtime` holds exactly those files. To move to a newer llama.cpp build: download
+the three archives, put their checksums into both scripts and a new `runtime-<build>.json` (every file, every
+link), and change `LOCAL_AI_BUILD` in `rapreaper_install.py`; scenario `local_ai` checks that all of them agree.
+
 ## Testing
 
 `DEVELOPMENT.md` describes the test suites (`tests/test_audio.py`, about 3 minutes; `tests/e2e.py`, 1.5 to 2 hours,

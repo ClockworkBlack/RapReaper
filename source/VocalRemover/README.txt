@@ -6,7 +6,7 @@ and the vocals (voice without the music). Everything happens on this computer.
 
 It comes inside the RapReaper folder (RapReaper\VocalRemover on Windows,
 RapReaper/VocalRemover on a Mac). RapReaper's installer sets it up, and
-RapReaper itself uses it when Claude is asked for an instrumental
+RapReaper itself uses it when the AI is asked for an instrumental
 (separate_song) or to learn a song's vocal effects (learn_song_effects).
 You can also use it on its own, from its window.
 
@@ -244,7 +244,7 @@ bothers you in a gap, and listen to both.
      as an instrument, heavy auto-tune effects, long echoes) are the
      hardest case and may leave more behind.
 
-In REAPER: ask Claude "make an instrumental from <song> and put it in
+In REAPER: ask the AI "make an instrumental from <song> and put it in
 REAPER" (separate_song with import_to_reaper), or drag the "(Instrumental)
 .wav" file onto a track yourself, add a new track for your voice and record.
 The file keeps the sample rate of the original song, so set the project to

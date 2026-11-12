@@ -1,8 +1,8 @@
-# RapReaper Guide (Mac): mix rap vocals in REAPER with Claude
+# RapReaper Guide (Mac): mix rap vocals in REAPER with an AI
 
-RapReaper 1.4.7 (nightly) · 9 November 2026
+RapReaper 1.5.0 (nightly) · 12 November 2026
 
-RapReaper lets you mix rap vocals in REAPER by typing to Claude: Claude sets REAPER's own plug-ins in real units, measures the audio before and after, and tells you what each change did. RapReaper and your audio stay on your Mac. Claude itself is an online service, so you need the internet, and the text of the chat (never audio) goes to Anthropic.
+RapReaper lets you mix rap vocals in REAPER by typing to an AI: Claude, ChatGPT's desktop app, Cursor, VS Code, LM Studio or any other app that speaks MCP, or RapReaper's own Local AI, which runs on your Mac for free. The AI sets REAPER's own plug-ins in real units, measures the audio before and after, and tells you what each change did. RapReaper and your audio stay on your Mac. An online AI app needs the internet, and the text of the chat (never audio) goes to the company that runs its model (Anthropic for Claude, OpenAI for ChatGPT); with the Local AI nothing leaves your Mac. This guide says "Claude" in its examples; the steps are the same in any of them.
 
 It also cuts empty air, breaths and single harsh sounds out of the clips, or turns one spot down without touching the clip; adds voice effects including auto-tune, all with REAPER's own plug-ins; makes an instrumental (and the voice alone) out of a finished song with the Vocal Remover, which now comes inside the RapReaper folder and can use your graphics processor; learns the vocal effects of a finished song you like and puts them on your track; measures how clearly the words come across and how the mix sounds on a phone; saves, opens and closes projects on your word; slides an instrumental into place by its music; reads a beat's tempo and key; brings a song made in Pro Tools, FL Studio or another program in to mix and master it here; and keeps the engineering numbers it works from on your Mac, so the advice is the same from one chat to the next. The whole process was tested against a simulated REAPER; a short self-test repeats the decisive checks on your computer.
 
@@ -10,25 +10,25 @@ This is the Mac guide. The Windows version of RapReaper has its own guide with t
 
 ## How it fits together
 
-Three programs on your Mac, one service outside. You type in Claude Desktop, and Claude picks a RapReaper tool. The tool server (a small Python program Claude starts) writes a small command file; the bridge script inside REAPER carries it out and answers. To measure, REAPER renders a few seconds of a track to a file on your Mac and RapReaper analyses it. Only the resulting numbers go back to Claude.
+Three programs on your Mac, and the AI. You type in your AI app (Claude Desktop, say), and its AI model picks a RapReaper tool. The tool server (a small Python program the app starts, through MCP, the Model Context Protocol) writes a small command file; the bridge script inside REAPER carries it out and answers. To measure, REAPER renders a few seconds of a track to a file on your Mac and RapReaper analyses it. Only the resulting numbers go back to the AI. With RapReaper's Local AI, the model itself runs on your Mac too (llama.cpp); with an online app it runs at the app's maker.
 
 ## What you need
 
-Five things, all free to install. Only REAPER (after its trial) and regular use of Claude cost money.
+Five things, all free to install. Only REAPER (after its trial) and regular use of an online AI app cost money; the Local AI is free.
 
 | What | Where to get it | Cost | Why |
 | --- | --- | --- | --- |
-| REAPER (the current version) | [reaper.fm/download.php](https://www.reaper.fm/download.php), the macOS download for your Mac (Apple Silicon or Intel) | Free for 60 days with every feature, then $60 for a personal licence | The recording program Claude controls. |
+| REAPER (the current version) | [reaper.fm/download.php](https://www.reaper.fm/download.php), the macOS download for your Mac (Apple Silicon or Intel) | Free for 60 days with every feature, then $60 for a personal licence | The recording program the AI controls. |
 | ReaPack, then the SWS extension through it | [reapack.com](https://reapack.com/) for ReaPack, REAPER's package installer; SWS then comes from inside REAPER | Free | SWS lets REAPER measure audio without pop-up windows. |
 | Python (3.12 or newer) | [python.org/downloads/macos](https://www.python.org/downloads/macos/), the "macOS 64-bit universal2 installer"; Homebrew's Python works too | Free | Runs RapReaper. Its maths packages go into RapReaper's own small environment inside the folder. |
-| Claude Desktop | [claude.com/download](https://claude.com/download) | The app is free. A paid plan is realistic for regular mixing: tool use eats the free allowance fast | Where you type. |
-| The RapReaper folder | The Mac zip that came with this guide, plus the model pieces (the files whose names contain `.onnx.part`) | Free | The connector: 57 tools, the measuring code, the bridge script for REAPER, RapReaper's own helper for clip edits, the Vocal Remover program with its neural networks (the pieces are its model file), and the engineering notes Claude works from. |
+| An AI app, or none | Any app that speaks MCP: Claude Desktop ([claude.com/download](https://claude.com/download)), ChatGPT's desktop app, LM Studio, Cursor, VS Code, Windsurf, Gemini CLI ... Or RapReaper's own **Local AI**: **Get Local AI.command** in the RapReaper folder downloads it (2.7 or 5.7 GB, once) | The online apps are free to install; a paid plan is realistic for regular mixing, as tool use eats a free allowance fast. The Local AI is free | Where you type. |
+| The RapReaper folder | The Mac zip that came with this guide, plus the model pieces (the files whose names contain `.onnx.part`) | Free | The connector: 57 tools, the measuring code, the bridge script for REAPER, RapReaper's own helper for clip edits, the Vocal Remover program with its neural networks (the pieces are its model file), and the engineering notes the AI works from. |
 
 Your audio interface or USB microphone works with REAPER as it is; on a Mac almost all of them need no driver. "AUDIO INTERFACE SETUP.txt" in the RapReaper folder sets it up step by step for any brand.
 
 ## Set-up, step by step
 
-Do these once, in this order; allow about half an hour. The installer in step 7 checks Python, the folder, REAPER, SWS and Claude, and tells you what is missing.
+Do these once, in this order; allow about half an hour. The installer in step 7 checks Python, the folder, REAPER, SWS and your AI apps, and tells you what is missing.
 
 1. **Your interface.** Follow "AUDIO INTERFACE SETUP.txt" (REAPER pointed at it, a Mono input for the mic, gain to about -12 dB peaks). If it already records in another program on this Mac, most of that is done.
 2. **REAPER.** Download the macOS version for your Mac (Apple Silicon or Intel), drag it into Applications and start it once. Until you buy a licence it shows an evaluation notice at every start: wait a few seconds, then click the button to carry on. Quit REAPER.
@@ -38,24 +38,25 @@ Do these once, in this order; allow about half an hour. The installer in step 7 
    - Extensions > ReaPack > Browse packages. Type `SWS` in the Filter box, right-click **SWS/S&M extension** and choose Install, then click Apply. Restart REAPER when ReaPack asks.
    - Check: the installer in step 7 reports "SWS extension found", and RapReaper's status says SWS is installed. Quit REAPER.
 4. **Python.** On python.org/downloads/macos take the **macOS 64-bit universal2 installer** of the current Python 3 and click through it with the standard choices. The `python3` that macOS itself offers is only a stub for Apple's developer tools and is not used; RapReaper's `.command` files look for python.org's or Homebrew's Python (`brew install python` works too).
-5. **Claude Desktop.** Install it and sign in.
+5. **An AI app.** Install the one you want to use and start it once (Claude Desktop: sign in). Several are fine: the installer connects each one it finds. No AI app? Skip this step: RapReaper's own Local AI is step 7's alternative (see "Other AI apps and RapReaper's Local AI").
 6. **RapReaper.** Double-click the RapReaper zip in Downloads; it unpacks into a folder. Open it until you see **Install RapReaper.command**: the folder that holds it is the RapReaper folder. Move that folder into your home folder (in the Finder: Go > Home, or Cmd+Shift+H), so that it becomes `/Users/<your name>/RapReaper`. Leave the model pieces (`MelRoformer-KimFT2-int8.onnx.part1of8` and so on) in Downloads: the installer joins them.
-   - Not in Downloads, Desktop or Documents: macOS asks each program (Terminal, REAPER, Claude) for permission to use those folders, and a refused one fails silently. Not in iCloud Drive, Dropbox or Google Drive either: they move files.
+   - Not in Downloads, Desktop or Documents: macOS asks each program (Terminal, REAPER, your AI app) for permission to use those folders, and a refused one fails silently. Not in iCloud Drive, Dropbox or Google Drive either: they move files.
 7. **Run the installer.** In the RapReaper folder, double-click **Install RapReaper.command**. The first time, macOS says the file "cannot be opened" because it came from the internet: open System Settings > Privacy & Security, scroll down, click **Open Anyway**, and double-click it again. (Or: open Terminal, type `bash` and a space, drag the file into the window, press Return.) A Terminal window shows what it does.
+   - It adds RapReaper to every AI app it finds (Claude Desktop, ChatGPT's desktop app and Codex, Cursor, VS Code, Windsurf, LM Studio, Gemini CLI). With none of them installed, its list says to double-click **Get Local AI.command** (once) and then **Start Local AI.command**: RapReaper's own AI, on this Mac.
    - It ends with **ALL SET**, or with **NOT FINISHED YET** and a short list of things to do. Do the list and run it again. It is safe to run as often as you like. After this first run, every RapReaper `.command` file opens by double-click: the installer releases them (and the Vocal Remover's files) from the download quarantine after checking each against the package's manifest.
    - Terminal asks once for permission to read your Downloads folder (for the model pieces): allow it.
    - With REAPER closed, it also switches off the one REAPER preference RapReaper cannot work with ("Set media items offline when application is not active"), keeping a copy of the settings file; with REAPER open, the self-test does that instead.
    - Its last step sets up the Vocal Remover: it checks the program against the package's manifest, allows it for RapReaper, joins the model pieces into `VocalRemover/models` (each checked against its published checksum) and then offers the graphics-processor test (a few minutes; see "Instrumentals from a song"). You can say no and run the test later from the Vocal Remover's window.
-8. **Restart Claude completely.** Claude menu > Quit Claude (or Cmd+Q), then open Claude again. Closing the window is not enough.
+8. **Restart your AI app completely.** Claude: Claude menu > Quit Claude (or Cmd+Q), then open Claude again; closing the window is not enough. Other apps: quit them (Cmd+Q) and open them again. The Local AI: double-click **Start Local AI.command**; your browser opens its chat window.
 9. **Start REAPER** and open or create a project. Save it once (Cmd+S). Give REAPER about a minute before the next step: the bridge starts after the evaluation notice, and after a quick quit-and-reopen of REAPER it waits a full minute. A small window with the words BRIDGE\_ALREADY\_RUNNING during that minute is harmless: close it.
-10. **Run the self-test.** In a new Claude chat, type: `Run the RapReaper self-test`
-    - The first time Claude uses each RapReaper tool it asks permission. Choose **Always allow** to stop the question for that tool, or Allow once to be asked every time.
-    - Claude runs the test in several short steps and then lists the checks. You may hear a faint beep. The test adds one muted track called "RapReaper self-test"; delete it afterwards if you like (right-click the track > Remove tracks).
-11. **Read the result.** Every line should say PASS. A line that says FAIL names what was measured and comes with its fix: do the fix and ask Claude to run the test again.
+10. **Run the self-test.** In a new chat in your AI app, type: `Run the RapReaper self-test`
+    - The first time the app uses each RapReaper tool it asks permission (the Local AI asks every time unless you choose Always allow). Choose **Always allow** to stop the question for that tool, or Allow once to be asked every time.
+    - The AI runs the test in several short steps and then lists the checks. You may hear a faint beep. The test adds one muted track called "RapReaper self-test"; delete it afterwards if you like (right-click the track > Remove tracks).
+11. **Read the result.** Every line should say PASS. A line that says FAIL names what was measured and comes with its fix: do the fix and ask the AI to run the test again.
 
-The installer needs no administrator password. It makes RapReaper's own small Python environment inside the folder (`kit/venv`) and puts NumPy and SciPy there, plus two optional packages when they can be fetched (lameenc for MP3 copies of exports, ONNX Runtime so RapReaper can run the separation networks itself when the Vocal Remover program is not allowed); the Mac's own Python is left as it is. Outside the folder it changes two files: REAPER's startup script (`~/Library/Application Support/REAPER/Scripts/__startup.lua`: two short marked blocks, one starts the bridge, the other notes each REAPER start and starts RapReaper's own small helper) and Claude's settings file (`~/Library/Application Support/Claude/claude_desktop_config.json`: one "rapreaper" entry). It keeps a dated copy of both files before changing them.
+The installer needs no administrator password. It makes RapReaper's own small Python environment inside the folder (`kit/venv`) and puts NumPy and SciPy there, plus two optional packages when they can be fetched (lameenc for MP3 copies of exports, ONNX Runtime so RapReaper can run the separation networks itself when the Vocal Remover program is not allowed); the Mac's own Python is left as it is. Outside the folder it changes two files: REAPER's startup script (`~/Library/Application Support/REAPER/Scripts/__startup.lua`: two short marked blocks, one starts the bridge, the other notes each REAPER start and starts RapReaper's own small helper) and the MCP settings of each AI app it finds (one "rapreaper" entry each; Claude's is `~/Library/Application Support/Claude/claude_desktop_config.json`). It keeps a dated copy of each file before changing it.
 
-To see RapReaper inside Claude, click the + in the chat box and open Connectors: "rapreaper" should be listed.
+To see RapReaper inside Claude, click the + in the chat box and open Connectors: "rapreaper" should be listed. Other apps list it among their MCP servers or tools.
 
 ## Updating RapReaper
 
@@ -63,9 +64,33 @@ When a new RapReaper zip comes, download it into Downloads (with any new model p
 
 **One complete package to carry to another computer.** The Vocal Remover's network (237 MB) is too large to come inside the zip, so it arrives as eight pieces. Once the zip(s) and the eight pieces are in Downloads, double-click **Make Full Packages.command** in the RapReaper folder: it writes `RapReaper-1.4.5-Windows-full.zip` (and `RapReaper-1.4.5-Mac-full.zip`, when the Mac zip is in Downloads too) next to them, with the model already in `VocalRemover/models`, checked against its published checksum and listed in the package's own checksum list. Copy a full package to any computer by USB stick or cloud drive, unzip it and run Install RapReaper: nothing else to download. A full package also works with Update RapReaper (it puts the model in place if that computer lacks it), and a damaged one is refused like any damaged zip.
 
+## Other AI apps and RapReaper's Local AI
+
+RapReaper is an MCP server, the standard way AI apps use tools, so it is not tied to one AI. The installer adds it to every AI app it finds on your Mac; each app reads it when it starts.
+
+| App | Where RapReaper is added | Notes |
+| --- | --- | --- |
+| Claude Desktop | Claude's settings file (`claude_desktop_config.json`) | The chat goes to Anthropic. |
+| ChatGPT's desktop app, Codex | `~/.codex/config.toml` in your user folder (the app, the Codex CLI and its editor extension share it) | The chat goes to OpenAI. ChatGPT in a web browser cannot reach a program on your Mac: use the desktop app. |
+| Cursor, Windsurf | their `mcp.json` / `mcp_config.json` | The chat goes to whoever runs the model you chose there. |
+| VS Code (GitHub Copilot) | VS Code's user `mcp.json` | A file with comments in it is left alone; the installer says so, and you add RapReaper by hand. |
+| LM Studio | `~/.lmstudio/mcp.json` | Runs AI models on your Mac. |
+| Gemini CLI | `~/.gemini/settings.json` | The chat goes to Google. |
+| Any other app that speaks MCP | by hand: `kit\state\ai_app_settings.txt` has the command, the argument and the one setting to give it, and ready-made blocks for the usual settings files | Then run the installer once with `python3 rapreaper_install.py --ai-apps none`, so it stops asking for an app. |
+
+`python3 rapreaper_install.py --ai-apps claude,chatgpt` connects only those (remembered); Uninstall RapReaper.command takes RapReaper out of every app. Answers name the app you use ("Quit Cursor completely and open it again"), and the privacy notes say who reads the chat.
+
+**RapReaper's Local AI.** No app, no account, nothing leaving your Mac: an open AI model runs on your own computer and drives RapReaper.
+
+1. Double-click **Get Local AI.command** once. It downloads llama.cpp's llama-server (MIT licence, about 15 MB) and an open model, Qwen 3.5 (Apache 2.0): the 4B (2.7 GB), or the 9B (5.7 GB), the default on a Mac with an Apple chip and 16 GB of memory or more. Each file is checked against its published checksum.
+2. Double-click **Start Local AI.command** whenever you want to use it. Its window shows what it is doing, and your browser opens the chat window (an address like `http://127.0.0.1:8077`, which only your Mac can reach). Keep that window open while you work; close it to stop the Local AI.
+3. Start REAPER with your project and type in the chat: `Run the RapReaper self-test`. The chat window asks before every RapReaper tool runs: Allow, Always allow, or Deny.
+
+What to expect: a model on your Mac is slower and less careful than Claude or ChatGPT. On an Apple chip it runs on the chip's graphics part; on an Intel Mac the first answer of a chat can take a few minutes, because the model first reads RapReaper's tool descriptions. Later answers come faster, and the 4B model is the quicker one. It gets RapReaper's 28 core tools (the vocal chain, balance, loudness, export, cuts and restore points, effects, tempo and key, chains, saving) and a short working method, so that the tool descriptions fit in its memory; separating songs, learning a song's effects, remastering and projects need a bigger AI app. RapReaper's own rules still hold: a plan before any cut, every change one undo step, nothing saved unless you ask. `LocalAI/README.txt` in the folder has the details; Start Local AI starts llama.cpp only when every one of its files is the one Get Local AI checked.
+
 ## Your first session
 
-A first mix is three things: a vocal and a beat on two named tracks, a saved version, and one sentence to Claude. Start every new song as a new project (File > New project) and save it once with Cmd+S. If the Save window offers to create a folder for the project, accept: each song then lives in its own folder.
+A first mix is three things: a vocal and a beat on two named tracks, a saved version, and one sentence to the AI. Start every new song as a new project (File > New project) and save it once with Cmd+S. If the Save window offers to create a folder for the project, accept: each song then lives in its own folder.
 
 1. **Beat.** Drag the beat's audio file from the Finder into REAPER's empty track area. Double-click the track's name and call it `Beat`.
 2. **Vocal track.** Press Cmd+T for a new track and name it `Lead Vox`. Click the round red button on the track (record-arm). Then right-click that button and pick a Mono input: the one your microphone is plugged into ("AUDIO INTERFACE SETUP.txt" says which).
@@ -73,11 +98,11 @@ A first mix is three things: a vocal and a beat on two named tracks, a saved ver
 4. **Record.** Cmd+R starts recording, Space stops. If REAPER asks what to do with the recorded file, choose to save it.
 5. **Save a version.** File > Save new version of project (Cmd+Option+Shift+S). This is your way back if you dislike a mix.
 6. **Check once.** The first time there is a recording in a project, type `Run the RapReaper self-test` again. Two more lines appear. They show that RapReaper measures your vocal on its own and at its true level, and that the measurement follows the fader. This is how RapReaper learns how your REAPER renders a single track.
-7. **Ask.** In Claude, type something like:
+7. **Ask.** In your AI app, type something like:
 
 > Clean up my lead vocal and make it sound professional. The vocal track is Lead Vox and the beat is Beat.
 
-Claude then works in this order and reports after each step:
+The AI then works in this order and reports after each step:
 
 1. **Plan.** Measures the raw vocal and tells you what it found. Nothing is changed yet.
 2. **Clean-up.** Rumble, hum, mud and the noise between lines.
@@ -86,9 +111,9 @@ Claude then works in this order and reports after each step:
 5. **De-essing.** Tames sharp S and T sounds.
 6. **Finish.** Matches the loudness to before, shows a before/after table and saves the chain.
 
-Then listen. Ask Claude to "switch the chain off and on while it plays" and judge with your ears. When you like it, press Cmd+S, or say "save the project": RapReaper saves only when you ask. Typical next requests: "sit the vocal in the beat", "add a short reverb", "can the words be heard?", "make it loud enough for Spotify", "export the song".
+Then listen. Ask the AI to "switch the chain off and on while it plays" and judge with your ears. When you like it, press Cmd+S, or say "save the project": RapReaper saves only when you ask. Typical next requests: "sit the vocal in the beat", "add a short reverb", "can the words be heard?", "make it loud enough for Spotify", "export the song".
 
-While Claude works, REAPER's render window flashes open and shut and playback stops: that is RapReaper measuring. Claude waits only about a minute for any one tool, so RapReaper keeps each step short and does long jobs, such as the self-test and the final loudness, in several steps. Claude carries on by itself until the job says it is finished.
+While the AI works, REAPER's render window flashes open and shut and playback stops: that is RapReaper measuring. AI apps usually wait only about a minute for any one tool, so RapReaper keeps each step short and does long jobs, such as the self-test and the final loudness, in several steps. The AI carries on by itself until the job says it is finished.
 
 This is what a before/after table looks like. It comes from the deliberately bad test recording used to check RapReaper in simulation; your numbers will differ.
 
@@ -107,15 +132,15 @@ One pass does not fix everything, and RapReaper says so. Under this table it lis
 
 ## What to say
 
-Talk to Claude the way you would talk to an engineer: say what you hear or what you want. These are the requests RapReaper is built around.
+Talk to the AI the way you would talk to an engineer: say what you hear or what you want. These are the requests RapReaper is built around.
 
-| You say | What Claude does |
+| You say | What the AI does |
 | --- | --- |
 | "Clean up my lead vocal", "make it sound professional" | The full pass: plan, clean-up, compression, tone, de-essing, finish. |
 | "Brighter", "clearer", "more air", "less muddy", "warmer", "too harsh" | Moves the tone EQ 1-2 dB that way, then re-fits the de-esser and re-matches the loudness. |
 | "More compression", "more even", "it sounds squashed" | Re-fits both compressors heavier or lighter, then the steps after them. |
 | "Make it more dynamic", "less dynamic, by 3 dB" | A real upward or downward stage fitted by measurement, loudness kept (vocal\_dynamics). |
-| "Punchier" | Claude asks which you mean: more even and in-your-face (heavier compression), or more snap at the start of each word (a slower attack on the first compressor). |
+| "Punchier" | The AI asks which you mean: more even and in-your-face (heavier compression), or more snap at the start of each word (a slower attack on the first compressor). |
 | "The S sounds hurt", "it sounds lispy" | More or less de-essing, in dB. |
 | "I hear hiss between lines" | Turns the gaps down further with the expander. |
 | "Too boomy", "too thin" | Moves the low cut up or down. |
@@ -145,13 +170,13 @@ Talk to Claude the way you would talk to an engineer: say what you hear or what 
 | "Turn it off so I can compare" | Switches the whole chain off and on while the song plays. |
 | "What does the de-esser do here?" | Switches that one tool off and on while the song plays, and tells you what to listen for. |
 | "I liked it better before", "take the last step back" | Sets the earlier values back, or tells you which entry to click in REAPER's Undo History. |
-| "Export the song", "export the first 33 seconds as an MP3 with a fade" | Bounces a WAV (and MP3 or M4A copies) into `kit\exports`, reports its loudness and true peak and how it comes across on a phone. If the file is clipped or peaks too high, Claude says so, and what to do first. |
+| "Export the song", "export the first 33 seconds as an MP3 with a fade" | Bounces a WAV (and MP3 or M4A copies) into `kit\exports`, reports its loudness and true peak and how it comes across on a phone. If the file is clipped or peaks too high, the AI says so, and what to do first. |
 | "What did we do last time?" | Reads the mix log. |
-| "What does RapReaper send to Claude?", "set privacy to maximum" | Shows and sets the privacy level and what is stored on your Mac (privacy). |
+| "What does RapReaper send to the AI?", "set privacy to maximum" | Shows and sets the privacy level and what is stored on your Mac (privacy). |
 | "Set the first compressor's ratio to 6" | Sets exactly that control and reads it back. |
 | "Is everything working?", "run the self-test" | Checks the connection, the plug-ins and the measuring on your REAPER. Every line says PASS, or FAIL with its fix. |
 
-Three habits make this work. Name your tracks. Ask for one change at a time when fine-tuning. Describe what you hear ("the S's are sharp") and let Claude choose what to turn.
+Three habits make this work. Name your tracks. Ask for one change at a time when fine-tuning. Describe what you hear ("the S's are sharp") and let the AI choose what to turn.
 
 ## What each change does, and what you will hear
 
@@ -171,7 +196,7 @@ A vocal chain is a row of small tools that each fix one thing. The order matters
 | 8 | De-esser (JS: De-esser) | Turns the hissy top of the voice down, only while an S or T sounds: by itself at most 5 dB | S sounds stop stabbing | A lisp; dull consonants |
 | 9 | Output trim (JS: Volume/Pan Smoother) | Sets the level back to where it started | A fair comparison: "after" is not simply louder | - |
 
-RapReaper adds only the tools your recording needs, so your chain may have fewer rows; with strong rumble it uses two high-pass filters in a row. To see the tools, click the FX button on the Lead Vox track: each row in that window is one tool from the table. To hear what one of them does, ask Claude while the song plays: "switch only the de-esser off", then "back on".
+RapReaper adds only the tools your recording needs, so your chain may have fewer rows; with strong rumble it uses two high-pass filters in a row. To see the tools, click the FX button on the Lead Vox track: each row in that window is one tool from the table. To hear what one of them does, ask the AI while the song plays: "switch only the de-esser off", then "back on".
 
 Why this order: cleaning comes first so the compressors do not react to rumble. The de-esser comes after the compressors and the bright EQ, because both make S sounds stick out more. The trim comes last because louder always sounds better, and that would fool your ears.
 
@@ -217,11 +242,11 @@ On the whole song there are three more tools: a small EQ dip on the beat where i
 | 5-9 kHz | S, T and SH sounds | the de-esser, only while they sound |
 | above 10 kHz | air and shine | a 1-4 dB shelf |
 
-Too much lift in presence turns clear into harsh; too much air turns shine into hiss. The same table, with more detail, is one of the engineering cards Claude reads.
+Too much lift in presence turns clear into harsh; too much air turns shine into hiss. The same table, with more detail, is one of the engineering cards the AI reads.
 
 ## Reading the numbers
 
-Claude reports measurements, not opinions. These are the ones you will see and what counts as normal.
+The AI reports measurements, not opinions. These are the ones you will see and what counts as normal.
 
 | Number | What it means | What is normal |
 | --- | --- | --- |
@@ -245,7 +270,7 @@ The loudness and true-peak targets are the services' published figures (Spotify 
 
 Plug-ins can turn the gaps down; they cannot take them away. RapReaper can: it edits the clips themselves, the way an engineer does with the mouse, through a small helper of its own that runs inside REAPER. Every edit is a single entry in REAPER's Undo History, so Cmd+Z takes the whole edit back, and since 1.3.0 every cut also writes a restore point first. The recording file on disk is never changed.
 
-| You say | What Claude does |
+| You say | What the AI does |
 | --- | --- |
 | "Cut the dead air", "clean the gaps", "remove the silence between lines" | **cut\_empty\_air**. First without changing anything: it measures the raw recording, finds every pause longer than half a second, and tells you how many it found and how many seconds of empty air they hold. Then, when you say yes, it cuts them out of the clips with 10 ms fades. Each cut keeps 0.2 s of tail after a word and 0.08 s of run-up before the next, so word endings and first consonants stay, and never leaves a sliver shorter than 120 ms (they click). A breath taken in a pause goes with the pause. |
 | "Remove the breaths", "I can hear him breathing" | **find\_breaths** lists every breath it can find, with its time as REAPER's ruler shows it, how far under the words it sits, and whether it can be cut cleanly or runs straight into a word. Breaths that sit in pauses are easiest to take with cut\_empty\_air, all at once. A breath that runs into a word is turned down instead (next section), because cutting it would clip the word. |
@@ -254,7 +279,7 @@ Plug-ins can turn the gaps down; they cannot take them away. RapReaper can: it e
 | "Heal the splits", "add fades to every clip", "remove the slivers" | **tidy\_clips**: heals splits that changed nothing, puts fades on every clip edge, removes pieces shorter than a length you choose; undoable. |
 | "Put the second verse on its own track" | **split\_to\_track** splits at the times you give and moves the piece to a new track under the source, with the same chain. |
 
-**What counts as a word.** RapReaper measures the level of the loud parts and treats anything more than 24 dB quieter as "not a word": room tone, breaths, lip noise, the chair. Quiet words in a rap take are usually 8-15 dB under the loud ones, so they are safe. If a soft phrase does get cut, say so: Claude restores it and runs again with a larger "words" margin or a longer run-up, and the result says which to change.
+**What counts as a word.** RapReaper measures the level of the loud parts and treats anything more than 24 dB quieter as "not a word": room tone, breaths, lip noise, the chair. Quiet words in a rap take are usually 8-15 dB under the loud ones, so they are safe. If a soft phrase does get cut, say so: the AI restores it and runs again with a larger "words" margin or a longer run-up, and the result says which to change.
 
 **Where the breath limit is.** A breath that is as loud as the quiet words cannot be told from a word by measurement alone. find\_breaths still catches most of them by their sound (a breath is hiss, a word has pitch), but a very loud breath right before a line is the one case where the mouse in REAPER is quicker: click the clip, drag over the breath, press S at both ends and Delete.
 
@@ -279,13 +304,13 @@ Every effect has an *amount* of 1 (subtle), 2 (normal) or 3 (strong), and you ca
 
 **Auto-tune and your REAPER.** ReaTune keeps its key, scale and speed in an internal settings block. RapReaper knows REAPER 7's layout of that block by heart and writes key, scale and speed straight into it (any scale: major, minor, chromatic, dorian, harmonic minor, pentatonic, blues ...), then reads it back. The self-test checks that the layout fits your REAPER; if a REAPER update ever changes it, RapReaper falls back to telling you exactly what to click in ReaTune's window, and can learn the new layout with you (plugin\_state).
 
-**The self-test covers these too.** It adds each effect plug-in to its own test track, sets the controls RapReaper uses, and reports a control with a different name on your REAPER as "not set" together with the real names, so Claude can set it by its real name right away.
+**The self-test covers these too.** It adds each effect plug-in to its own test track, sets the controls RapReaper uses, and reports a control with a different name on your REAPER as "not set" together with the real names, so the AI can set it by its real name right away.
 
 ## Turning one spot down: breaths, words, one S
 
 Sometimes the chain is right but one place is not: a loud breath before a line, one word that jumps out, one S that stabs. The section above cuts or lowers such a piece in the clip itself. RapReaper can also turn just that spot down without touching the clip at all, by the number of dB you choose, with fades of a few milliseconds so you do not hear a jump. This is called a duck. Nothing else in the song changes; the clip stays in one piece.
 
-| You say | What Claude does |
+| You say | What the AI does |
 | --- | --- |
 | "The breaths are too loud, but keep them" | **find\_breaths** lists every breath with its time, how far under your voice it is, whether it can be cut cleanly, and whether it is already ducked. **duck\_section** then turns down the ones you pick, all in one step. 6 to 10 dB down keeps them natural; breaths taken out completely sound edited. |
 | "Turn the word at 1:12 down a bit" | **duck\_section** turns that stretch down: 3 to 6 dB is a gentle change. Give the time from REAPER's timeline, or put the play cursor there and say so. |
@@ -294,7 +319,7 @@ Sometimes the chain is right but one place is not: a loud breath before a line, 
 
 **How a duck works.** RapReaper puts one more plug-in at the very end of the vocal chain, after the Output trim: a small effect of its own, "RapReaper Ducks" (the installer copies it into REAPER's Effects folder). It sits at full level, so on its own it changes nothing. Each duck is a dip drawn in that plug-in's one control as an envelope, and in REAPER you see it as a line under the track. RapReaper draws the dip, reads the whole envelope back to check it, and then measures the spot with the ducks on and off. When it did what you asked, the answer says so in numbers.
 
-**Two things to know.** The ducks belong to this recording: they are tied to times in the song. Re-fitting the chain leaves them alone and measures without them; a saved chain leaves them out. If you re-record or move the vocal, take the old ducks back first. And a new dip may cover an old one, not cut it: a range that covers an earlier dip completely replaces it, which is how you change its depth; a range that starts or ends inside one is refused, and Claude says where the old dip is.
+**Two things to know.** The ducks belong to this recording: they are tied to times in the song. Re-fitting the chain leaves them alone and measures without them; a saved chain leaves them out. If you re-record or move the vocal, take the old ducks back first. And a new dip may cover an old one, not cut it: a range that covers an earlier dip completely replaces it, which is how you change its depth; a range that starts or ends inside one is refused, and the AI says where the old dip is.
 
 ## Learning the effects of a song
 
@@ -302,17 +327,17 @@ Put a finished song you like in `kit\references` (WAV; MP3 too when the Vocal Re
 
 | Step | What happens | How long |
 | --- | --- | --- |
-| 1. The voice on its own | The Vocal Remover's network (the Mel-Band Roformer, see "Instrumentals from a song") separates the voice from the music: RapReaper starts the Vocal Remover program that came in its folder (the installer allowed exactly that copy, by path and checksum; RapReaper never starts a program it merely found), or runs the same network itself through ONNX Runtime with the model file in `VocalRemover\models`. If you already have the song's vocal as a file, name that instead and nothing needs separating. | A few minutes for a whole song, less with the graphics processor. Claude calls the tool again every minute or so until it is done; nothing is lost in between. |
+| 1. The voice on its own | The Vocal Remover's network (the Mel-Band Roformer, see "Instrumentals from a song") separates the voice from the music: RapReaper starts the Vocal Remover program that came in its folder (the installer allowed exactly that copy, by path and checksum; RapReaper never starts a program it merely found), or runs the same network itself through ONNX Runtime with the model file in `VocalRemover\models`. If you already have the song's vocal as a file, name that instead and nothing needs separating. | A few minutes for a whole song, less with the graphics processor. The AI calls the tool again every minute or so until it is done; nothing is lost in between. |
 | 2. The measurements | Up to 90 seconds of the voice, from its first sung part, are measured: auto-tune and how hard, the key, reverb, delay, compression, width, telephone, tone and S sounds. With the music on its own beside it, also the record's balance: how many dB the voice sits above the music, in plain words, with the balance\_vocal\_and\_beat call that puts the same balance on your tracks. | Seconds. |
 | 3. On your track | Reverb and delay as effect tracks, set to the measured size, time and level; the double, the telephone sound and auto-tune through the voice\_effect tool, with the measured key, scale and speed; compression and tone come back as the vocal chain stages to run, because those are fitted by measurement to your own recording. | Seconds. Every part is a named entry in REAPER's undo history. |
 
-**How sure it is.** These are measurements of a mixed, mastered record with the music taken out by a neural network, not a reading of the original session. Every finding carries a confidence from 0 to 1 and the numbers it was read from, and Claude reads them out that way. A delay shorter than about a quarter of a second cannot be told from the voice's own ending; gentle saturation cannot be told from a bright EQ, so it is reported as not measurable rather than guessed.
+**How sure it is.** These are measurements of a mixed, mastered record with the music taken out by a neural network, not a reading of the original session. Every finding carries a confidence from 0 to 1 and the numbers it was read from, and the AI reads them out that way. A delay shorter than about a quarter of a second cannot be told from the voice's own ending; gentle saturation cannot be told from a bright EQ, so it is reported as not measurable rather than guessed.
 
 **What this needs on your Mac.** The Vocal Remover with its model file (the installer joins the pieces into `VocalRemover\models`), or ONNX Runtime (the installer adds it) with the same model file. Every model file is checked against its published checksum before it is loaded. The older Kim Vocal 2 model (`Kim_Vocal_2.onnx` in `kit\models`) still works when nothing newer is there.
 
 ## Instrumentals from a song: the Vocal Remover
 
-The Vocal Remover takes a finished song apart into the music and the voice. Since 1.4.0 it lives inside the RapReaper folder (`VocalRemover`), the installer sets it up, and Claude can use it: say "make an instrumental from Night Drive" (the song in `kit\references`) and **separate\_song** first tells you what it would make, then on your word runs the separation in the background (minutes for a whole song; Claude follows the job until it is finished) and saves `Night Drive (Instrumental).wav` and `Night Drive (Vocals).wav` into `kit\imports`. "Put it in REAPER" lays the instrumental (and the vocal, if you want it) on new tracks, lined up at 0, and you record over it. The two files add up to the song exactly, sample for sample.
+The Vocal Remover takes a finished song apart into the music and the voice. Since 1.4.0 it lives inside the RapReaper folder (`VocalRemover`), the installer sets it up, and the AI can use it: say "make an instrumental from Night Drive" (the song in `kit\references`) and **separate\_song** first tells you what it would make, then on your word runs the separation in the background (minutes for a whole song; the AI follows the job until it is finished) and saves `Night Drive (Instrumental).wav` and `Night Drive (Vocals).wav` into `kit\imports`. "Put it in REAPER" lays the instrumental (and the vocal, if you want it) on new tracks, lined up at 0, and you record over it. The two files add up to the song exactly, sample for sample.
 
 You can also use the Vocal Remover on its own: double-click `VocalRemover\VocalRemover.exe`, drop a song on its window (MP3, WAV, FLAC or Ogg Vorbis), pick a part or the whole song, a mode and a file type, and it writes the two files into `VocalRemover\Output`. Its own `README.txt` explains every mode.
 
@@ -324,7 +349,7 @@ __GUIDE_TABLE__
 
 What remains after a separation is mostly traces of S and T sounds and the reverb or delay tails of the old voice; heavily processed ad-libs, layered doubles and vocal chops are the hardest case. Expect an instrumental you can record over on most songs, not a guaranteed total removal: listen before you build on it. Your new vocal covers most of what is left; where the old voice is still audible in a gap, "turn the beat down there" (duck\_section) hides it.
 
-**The graphics processor.** On a Mac this is CoreML, which runs the network on the graphics processor and the Neural Engine of Apple Silicon. The Vocal Remover tests it before using it: "Test the graphics processor" in its window (the installer offers the same test at the end) runs one 8-second window through the network on the processor and through CoreML, compares the two results and times them. It switches CoreML on only when it works and is faster, and remembers that in `VocalRemover/settings.json`; RapReaper follows the same setting when it starts the program for Claude. If CoreML fails in the middle of a song, the song is finished on the processor and the result says so. The graphics-processor model is a float16 copy that the program makes from the processor model once (460 MB in `VocalRemover/models`, nothing downloaded), and its checksum is checked like every other model file. `python3 rapreaper_install.py --gpu on` additionally makes RapReaper's own ONNX Runtime ask for CoreML when it separates without the program. The Vocal Remover runs on Apple Silicon Macs (M1 and later) with macOS 14 or newer; on an Intel Mac RapReaper separates with its own ONNX Runtime on the processor.
+**The graphics processor.** On a Mac this is CoreML, which runs the network on the graphics processor and the Neural Engine of Apple Silicon. The Vocal Remover tests it before using it: "Test the graphics processor" in its window (the installer offers the same test at the end) runs one 8-second window through the network on the processor and through CoreML, compares the two results and times them. It switches CoreML on only when it works and is faster, and remembers that in `VocalRemover/settings.json`; RapReaper follows the same setting when it starts the program for the AI. If CoreML fails in the middle of a song, the song is finished on the processor and the result says so. The graphics-processor model is a float16 copy that the program makes from the processor model once (460 MB in `VocalRemover/models`, nothing downloaded), and its checksum is checked like every other model file. `python3 rapreaper_install.py --gpu on` additionally makes RapReaper's own ONNX Runtime ask for CoreML when it separates without the program. The Vocal Remover runs on Apple Silicon Macs (M1 and later) with macOS 14 or newer; on an Intel Mac RapReaper separates with its own ONNX Runtime on the processor.
 
 **Speed to expect on the processor.** On the two-core test computer (a server processor with the 8-bit vector instructions) a 3-minute song takes about 4 minutes in the default mode, 9 with the BS-Roformer and 13 with both networks. A laptop processor without those instructions is much slower: on a Ryzen 7 3700U one 8-second window of the BS-Roformer took 131-189 s against about 20 s on the test computer, so count on roughly half an hour for a 3-minute song in the default mode and over an hour with the BS-Roformer; `start_seconds` and `seconds` cut the work down to the part you need, and the graphics processor is the real cure.
 
@@ -342,11 +367,11 @@ Half of all listening happens on one small speaker: nothing under about 350 Hz, 
 | Harsh, spitty top | A small speaker exaggerates 5-9 kHz: S sounds and hi-hats | Advice (nothing automatic): de-ess the lead a little harder (`vocal_chain` stage `deess`), dip the beat 1-2 dB at 6-8 kHz when the hi-hats are the cause. The number: `phone_top_5to9k_over_words_1to4k_db`, aim for under -3 |
 | Clipping | With the bass taken away the mid-range peaks reach full scale, and the phone's limiter clips them | Sets the master limiter's ceiling to -1.5 dB (or says to finish with master\_loudness when there is no limiter yet). The number: `phone_true_peak_dbtp`, aim for under -0.5 |
 
-Ask first without applying: Claude reads the plan out, then makes the moves when you say yes. Every move is one entry in REAPER's undo history, the answer shows every number before and after, and the engineering card `phones` (reference\_card) holds the reasons. Nothing replaces listening on the phone itself: export a short preview (`export_mix` with a start and end) and play it there.
+Ask first without applying: the AI reads the plan out, then makes the moves when you say yes. Every move is one entry in REAPER's undo history, the answer shows every number before and after, and the engineering card `phones` (reference\_card) holds the reasons. Nothing replaces listening on the phone itself: export a short preview (`export_mix` with a start and end) and play it there.
 
 ## Tempo, key and the engineering cards
 
-Two 1.4.0 tools give Claude facts instead of guesses.
+Two 1.4.0 tools give the AI facts instead of guesses.
 
 **song\_tempo\_and\_key** measures the beat (or any track, or a song in the references folder) and gives:
 
@@ -358,13 +383,13 @@ Two 1.4.0 tools give Claude facts instead of guesses.
 
 Drums alone give no key, and a beat built on drums and one bass note gives a guess: the answer says so.
 
-**reference\_card** holds the numbers RapReaper and this guide work from, on your Mac: the loudness the streaming services normalize to and their true-peak ceilings; where things live in a rap vocal; compressor and de-esser starting points; reverb and delay for rap (short dark plate, pre-delay, timed echoes, throws); auto-tune and keys; the order of work; doubles and ad-libs; the 808 problem; recording; a glossary; and your phrases with the tool for each. When you ask "how loud should it be for Spotify" or "what does the attack do", Claude reads the card and answers from it, as starting points: your ears decide.
+**reference\_card** holds the numbers RapReaper and this guide work from, on your Mac: the loudness the streaming services normalize to and their true-peak ceilings; where things live in a rap vocal; compressor and de-esser starting points; reverb and delay for rap (short dark plate, pre-delay, timed echoes, throws); auto-tune and keys; the order of work; doubles and ad-libs; the 808 problem; recording; a glossary; and your phrases with the tool for each. When you ask "how loud should it be for Spotify" or "what does the attack do", the AI reads the card and answers from it, as starting points: your ears decide.
 
 ## Fitting an instrumental into place
 
 You recorded over a rough beat, and now the real instrumental has arrived: a better master, with a longer intro, or trimmed at the start. Or a vocal from another session has to land on this beat. **fit\_instrumental** slides a track's clips so that its music coincides with another track that holds the same music.
 
-| You say | What Claude does |
+| You say | What the AI does |
 | --- | --- |
 | "Line the new beat up with the old one" | Renders both tracks as recorded and compares them: first their attacks (every hit, at one-millisecond resolution, over every possible shift), then the waveforms themselves around that shift, to the sample. It tells you how far the track would move, how sure it is, and how much of the two overlaps. Nothing moves yet. |
 | "Yes, do it" | Moves the clips as one undoable step, measures again to confirm, and corrects a leftover of more than 2 ms once. |
@@ -379,14 +404,14 @@ The reference can be a vocal recorded over the old beat: enough of the beat leak
 
 Three 1.4.0 tools do what REAPER's File menu does, after showing you what would happen.
 
-| You say | What Claude does |
+| You say | What the AI does |
 | --- | --- |
 | "Which projects are there?" | **list\_projects**: the project tabs open in REAPER (which is active, which has unsaved changes) and REAPER's own list of recent projects, numbered. |
 | "Open Night Drive", "open the second recent project", "open a new project" | **open\_project** by name, by recent number, or by the path of a project REAPER lists as recent (a project REAPER has never opened is opened once by hand); or a new empty project. Without your yes it only reports; with it, REAPER's own open. |
 | "Close this project" | **close\_project**. When it is the only tab, REAPER keeps one project open, so an empty project takes its place; the answer says so. |
 | "Save the project" | **save\_project**: REAPER's own Save (Cmd+S), to the project's own file, never Save As. |
 
-Unsaved changes are never dropped without your word. When the open project has them, the plan says so and Claude asks which you want: save first, drop the changes, or keep the project open in its tab and open the other one in a new tab. RapReaper opens only project files that REAPER lists as recent or that lie in your own user folder; a project REAPER has never opened on this Mac is opened once by hand (File > Open project), and from then on RapReaper can open it.
+Unsaved changes are never dropped without your word. When the open project has them, the plan says so and the AI asks which you want: save first, drop the changes, or keep the project open in its tab and open the other one in a new tab. RapReaper opens only project files that REAPER lists as recent or that lie in your own user folder; a project REAPER has never opened on this Mac is opened once by hand (File > Open project), and from then on RapReaper can open it.
 
 ## Remastering a song from another program
 
@@ -394,7 +419,7 @@ Songs made in Pro Tools, FL Studio ("Fruity Loops"), Ableton Live, Logic, Cubase
 
 1. In the other program, export every track (or at least the vocal and the beat) as a WAV from the very start of the song, 24-bit, at the session's sample rate, without normalizing. Export the finished mix once more as one file to compare against. The exact menu for each program is below.
 2. Copy the files into the RapReaper folder under `kit\imports\<the song's name>`.
-3. Ask Claude: "Remaster Night Drive" (the folder's name). **remaster** lists what it found: every music file with its length, channels and a guessed role (vocal, beat, mix), and any project file of another program with the export steps for it. Nothing changes yet.
+3. Ask the AI: "Remaster Night Drive" (the folder's name). **remaster** lists what it found: every music file with its length, channels and a guessed role (vocal, beat, mix), and any project file of another program with the export steps for it. Nothing changes yet.
 4. Say yes. Every music file goes on a track of the open project named after it, lined up from the same start, or by the timeline positions Pro Tools writes into its exported clips, as one undoable step. Then the usual pass: the vocal chain on the vocal tracks, balance, the final loudness, the export. For one finished mix: measure, fix resonances, the final loudness, the export.
 
 | Program | Where the export is |
@@ -423,7 +448,7 @@ The recording sets the ceiling. A mix can remove hum and tame sharp S sounds, bu
 - **Input.** Record the mic on a Mono input, as in "Your first session". On a stereo input the voice lands on one side only; RapReaper spots that and tells you the ten-second fix.
 - **Dry.** Record without effects. Everything in this guide is added afterwards and can be undone.
 
-When a measurement points at the recording (clipping, a noisy room, a far-away mic), Claude says so and tells you what to change next time. "AUDIO INTERFACE SETUP.txt" covers the interface side for any brand.
+When a measurement points at the recording (clipping, a noisy room, a far-away mic), the AI says so and tells you what to change next time. "AUDIO INTERFACE SETUP.txt" covers the interface side for any brand.
 
 ## Doing it again
 
@@ -441,22 +466,22 @@ Every mix leaves a record you can reuse: the chain is saved as a numbered versio
 
 Two things to know:
 
-- **A saved chain is fitted to one recording.** Thresholds depend on how loud a take is. Applying a saved chain replaces RapReaper's chain on that track: plug-ins the saved chain does not use are switched off, not removed. Claude then measures and adjusts it. For a new song, or for ad-libs, a fresh pass gives a better fit and takes a few minutes.
-- **To adjust, name the change.** "Brighter", "less compression", "3 dB of de-essing": Claude re-fits that step and the ones after it, then saves the result as the next version.
+- **A saved chain is fitted to one recording.** Thresholds depend on how loud a take is. Applying a saved chain replaces RapReaper's chain on that track: plug-ins the saved chain does not use are switched off, not removed. The AI then measures and adjusts it. For a new song, or for ad-libs, a fresh pass gives a better fit and takes a few minutes.
+- **To adjust, name the change.** "Brighter", "less compression", "3 dB of de-essing": the AI re-fits that step and the ones after it, then saves the result as the next version.
 
 ## Safety and privacy
 
 RapReaper runs on your Mac: it opens no network port, contains no network code, and your audio never leaves the Mac. The programs it can start are its own vocal-separation worker, the Vocal Remover that came in its folder (the installer allows that one copy, by path and checksum, and RapReaper stops using it the moment the file changes) and the ones you allowed by name yourself (ffmpeg, whisper.cpp), each only for its one job.
 
-**What leaves your computer, and how little.** Only what any Claude chat sends to Anthropic: the words you type and the text the tools return. No audio, ever: RapReaper measures on your Mac and hands Claude only the numbers. The answers never contain the folder paths on your Mac, your macOS user name, the name of your Mac or of an iCloud account: RapReaper writes `<RapReaper folder>` and `~` instead, and Claude is told to call only the tools a request needs, to ask for no personal details and not to repeat paths or names you type.
+**What leaves your computer, and how little.** Only what any chat in your AI app sends to the company that runs its model (Anthropic for Claude, OpenAI for ChatGPT and Codex, Google for Gemini; nothing at all with the Local AI or another model on your Mac): the words you type and the text the tools return. No audio, ever: RapReaper measures on your Mac and hands the AI only the numbers. The answers never contain the folder paths on your Mac, your macOS user name, the name of your Mac or of an iCloud account: RapReaper writes `<RapReaper folder>` and `~` instead, and the AI is told to call only the tools a request needs, to ask for no personal details and not to repeat paths or names you type.
 
-**Names.** The names of your music files (songs, beats, takes, stems, mixes, exports, the songs in the references and imports folders) and of your saved projects are given to Claude as they are, so it can list what is in a folder and call a song by its name (your choice, 6 October 2026); never a folder or a path (from any drive, network or cloud folder, only the file name goes out: `D:\Music\…\vocal.wav`), never your account name, your computer's name or an e-mail address (they become `<you>`, `<this Mac>`, `<email>`, also inside a song or project name), and never any other kind of file. The privacy level (the **privacy** tool shows it, and Claude can raise it; lowering it, switching off the record below or shortening how long it is kept is your own step: `python3 rapreaper_install.py --privacy standard`, `--activity-log off` or `--expire-days N` in the RapReaper folder) decides the rest: at `standard` every name is plain; at `strict`, the default, a file that is not music (a Pro Tools session, a note) becomes a label such as "file #3.ptx"; at `maximum` track names become labels too ("track #2"). What a label stands for is in `kit\state\private_names.txt` on your Mac, and every tool takes the labels back. `kit\logs\sent_to_claude.log` records every answer exactly as it was sent, so you can see for yourself what left the Mac. Measurement files, vocal-session notes and the activity log older than 30 days are removed (settable).
+**Names.** The names of your music files (songs, beats, takes, stems, mixes, exports, the songs in the references and imports folders) and of your saved projects are given to the AI as they are, so it can list what is in a folder and call a song by its name (your choice, 6 October 2026); never a folder or a path (from any drive, network or cloud folder, only the file name goes out: `D:\Music\…\vocal.wav`), never your account name, your computer's name or an e-mail address (they become `<you>`, `<this Mac>`, `<email>`, also inside a song or project name), and never any other kind of file. The privacy level (the **privacy** tool shows it, and the AI can raise it; lowering it, switching off the record below or shortening how long it is kept is your own step: `python3 rapreaper_install.py --privacy standard`, `--activity-log off` or `--expire-days N` in the RapReaper folder) decides the rest: at `standard` every name is plain; at `strict`, the default, a file that is not music (a Pro Tools session, a note) becomes a label such as "file #3.ptx"; at `maximum` track names become labels too ("track #2"). What a label stands for is in `kit\state\private_names.txt` on your Mac, and every tool takes the labels back. `kit\logs\sent_to_ai.log` records every answer exactly as it was sent, so you can see for yourself what left the Mac. Measurement files, vocal-session notes and the activity log older than 30 days are removed (settable).
 
 Three things keep it smaller still:
 
 - Name tracks, songs and the project plainly ("Lead Vox", "Song 3"); those names do go into the chat.
 - Leave personal details out of what you type. Mixing never needs your real name, address or account details.
-- How Anthropic keeps and uses chats is set by your Claude account's privacy settings and Anthropic's privacy policy; check them once ([support.claude.com](https://support.claude.com)).
+- With an online AI app, how its maker keeps and uses chats is set by your account's privacy settings there. For Claude: your Claude account's privacy settings and Anthropic's privacy policy; check them once ([support.claude.com](https://support.claude.com)).
 
 | RapReaper can | RapReaper cannot |
 | --- | --- |
@@ -467,11 +492,11 @@ Three things keep it smaller still:
 | Play, stop and move the cursor (never while REAPER is recording) | Reach the internet, or run any program other than its own separation worker and the ones you allowed by name |
 | Write measurement files and exports inside the RapReaper folder, and tidy away its own old measurement files there | Write audio anywhere else |
 
-- **Every change to your project is undoable.** Every change is a named entry, "RapReaper: ...", in REAPER's Undo History window (Cmd+Option+Z). One request to Claude makes several entries, so a single Cmd+Z takes back only the last small part. Each answer from RapReaper says which entry to click to take the whole step back; you can also just ask Claude to take it back.
-- **Measuring leaves nothing changed.** To measure one step of the chain, the plug-ins after it must be off for a moment, and a very loud track needs its fader down. RapReaper sends that change, the measurement and the change back to REAPER as one command, so REAPER puts everything back by itself, even if Claude or RapReaper stops in the middle. RapReaper also keeps a note of what it changed and puts back at its next step whatever still stands the way a measurement left it.
-- **You stay in charge.** Claude asks before the first use of each RapReaper tool. "Always allow" stops the question for that tool; "Allow once" keeps Claude asking every time. The tools that take something away or change what is open (a cut, a mute, removing an effect, applying a chain that switches plug-ins off, opening or closing a project) are marked as such for the Claude app, and Claude is told to do those only after you have said yes to that exact step, and never because a track name, a file name or a note looked like an instruction. Save a new version of the project before each session.
+- **Every change to your project is undoable.** Every change is a named entry, "RapReaper: ...", in REAPER's Undo History window (Cmd+Option+Z). One request to the AI makes several entries, so a single Cmd+Z takes back only the last small part. Each answer from RapReaper says which entry to click to take the whole step back; you can also just ask the AI to take it back.
+- **Measuring leaves nothing changed.** To measure one step of the chain, the plug-ins after it must be off for a moment, and a very loud track needs its fader down. RapReaper sends that change, the measurement and the change back to REAPER as one command, so REAPER puts everything back by itself, even if the AI app or RapReaper stops in the middle. RapReaper also keeps a note of what it changed and puts back at its next step whatever still stands the way a measurement left it.
+- **You stay in charge.** Your AI app asks before the first use of each RapReaper tool (the Local AI's chat window before every use). "Always allow" stops the question for that tool; "Allow once" keeps the app asking every time. The tools that take something away or change what is open (a cut, a mute, removing an effect, applying a chain that switches plug-ins off, opening or closing a project) are marked as such for the app, and the AI is told to do those only after you have said yes to that exact step, and never because a track name, a file name or a note looked like an instruction. Save a new version of the project before each session.
 - **What it will not run or load.** RapReaper never starts a program it merely found on the Mac. Besides its own separation worker it can start only the Vocal Remover the installer allowed (after checking it against the package's manifest) and programs you allowed yourself, one at a time, with an "Allow ..." file that records the program's path and checksum; it stops using a program whose file changed. Every neural-network model file is checked against its published checksum before it is loaded, by RapReaper and by the Vocal Remover alike. The bridge script and RapReaper's own helper script are checked against their checksums every time RapReaper starts. A RapReaper zip is installed by the updater only when every file in it matches the zip's own manifest. Audio files are read within fixed limits, one song is separated at a time, and a separation that runs over an hour is stopped.
-- **What the installer touched.** Outside the RapReaper folder: REAPER's startup script (two marked blocks), REAPER's settings file (one preference, with REAPER closed), Claude's settings file (two of them if both kinds of the Claude app are installed) and RapReaper's own Python environment inside its folder. A dated copy of each changed file sits beside it, and Uninstall RapReaper.command takes the changes out again. Since 1.4.7, "fix my setup" (and the self-test) also saves that one preference in REAPER's settings file while REAPER is open, so that it stays off after a restart; only that line changes, with a copy of the old file kept beside it.
+- **What the installer touched.** Outside the RapReaper folder: REAPER's startup script (two marked blocks), REAPER's settings file (one preference, with REAPER closed), the MCP settings file of each AI app it found (one "rapreaper" entry each) and RapReaper's own Python environment inside its folder. A dated copy of each changed file sits beside it, and Uninstall RapReaper.command takes the changes out again. Since 1.4.7, "fix my setup" (and the self-test) also saves that one preference in REAPER's settings file while REAPER is open, so that it stays off after a restart; only that line changes, with a copy of the old file kept beside it.
 - **The one third-party part.** The bridge script inside REAPER is "Reaper Daemon" (MIT licence), included unmodified; `NOTICE.txt` lists its checksums. RapReaper only sends it commands from a short allow-list, and the bridge's own switch for saving the project stays off.
 - **Its limit.** The bridge takes its commands from files in the RapReaper folder. Another program already running under your macOS account could write there too, just as it could already change any of your files. Inside your own home folder, other macOS accounts on the Mac cannot. Nothing is exposed to the network. Keep one REAPER open at a time.
 
@@ -479,23 +504,24 @@ Three things keep it smaller still:
 
 ## What was tested, and what you confirm on your Mac
 
-RapReaper was tested end to end against a simulated REAPER, because the workspace it was built in cannot run Windows, REAPER or Claude Desktop. The self-test (set-up step 10) repeats the decisive checks on your real REAPER, in a few short steps.
+RapReaper was tested end to end against a simulated REAPER, because the workspace it was built in cannot run Windows, macOS, REAPER or the AI apps. The self-test (set-up step 10) repeats the decisive checks on your real REAPER, in a few short steps.
 
 | What was tested | How | Result |
 | --- | --- | --- |
 | The measuring code, the effect detectors, the tempo and key finders and the alignment | Test signals built to the EBU's published definitions for loudness meters, synthetic recordings with defects of known size, half a minute of real speech, sung test voices with effects of known size, drum patterns and chord loops of known tempo and key, and copies of a beat shifted by known amounts | __AUDIO__ checks passed |
 | The whole process, every tool | The real RapReaper server, the real bridge script and RapReaper's helper, driving a stand-in for REAPER with models of its plug-ins, project tabs and clips; the installer against stand-in Mac and Windows profiles, including damaged settings files and an update from a newer zip; the song-effects tools with a real separation by the neural network | __E2E__ checks passed |
 | Things going wrong on purpose | REAPER crashing or hanging in the middle of a measurement, a cancelled request, file rules, a command file REAPER cannot read, wrong render settings, a slow computer, a mix over full scale, a full disk, an unsaved project when another is opened | Part of the above |
-| What reaches Anthropic | Live answers, errors and the log searched for the real folder and user name; the filter itself run on user names, computer names, OneDrive and iCloud names, Mac paths and every kind of Windows and Mac path an independent privacy review could find; every reply checked to pass the filter as it is sent; no answer ever carrying audio data | Part of the above |
+| What reaches the AI | Live answers, errors and the log searched for the real folder and user name; the filter itself run on user names, computer names, OneDrive and iCloud names, Mac paths and every kind of Windows and Mac path an independent privacy review could find; every reply checked to pass the filter as it is sent; no answer ever carrying audio data | Part of the above |
+| Other AI apps and the Local AI (1.5.0) | The tool server started the way Claude, ChatGPT and Codex, Cursor, VS Code, LM Studio, Gemini CLI and llama.cpp start it; each app's settings file written by the installer on stand-in profiles, including files with comments and damaged files; Start Local AI with a stand-in llama-server (its files checked, a busy port, the processor fallback, the tools at start-up) | Part of the above; the real llama.cpp and model were not run there |
 | The Vocal Remover | Its signal-processing and model-conversion tests; the whole window driven by a headless browser (loading a song, choosing a part, a separation, the graphics controls); the two networks measured on three MUSDB18-HQ test songs against their true separate tracks (the table in "Instrumentals from a song"); the float16 graphics model checked against the full-precision network | All passed; the graphics processor itself can only be tested on your Mac (the built-in test does that) |
 | The bridge script | Its author's own tests, run on the exact files in the kit | 664 of 664 checks passed |
-| Security and privacy review | Three independent reviews of the code (every place that opens a file, starts a program or sends a command; what reaches Anthropic and what text from the project could read like an instruction; about 5,000 hostile tool calls with every file the server touched watched), a second pass that tried to bypass each fix, and an acceptance review that ran an ordinary mixing session; the 1.3 and 1.4 additions reviewed against the same rules | Every confirmed finding fixed and pinned by a test; `SECURITY.txt` lists them |
+| Security and privacy review | Three independent reviews of the code (every place that opens a file, starts a program or sends a command; what reaches the AI and what text from the project could read like an instruction; about 5,000 hostile tool calls with every file the server touched watched), a second pass that tried to bypass each fix, and an acceptance review that ran an ordinary mixing session; the 1.3 and 1.4 additions reviewed against the same rules | Every confirmed finding fixed and pinned by a test; `SECURITY.txt` lists them |
 
 Only your Mac can confirm these things:
 
-- **REAPER's real plug-ins.** The self-test adds the plug-ins of the vocal chain and the limiter, and sets their controls. A control with a different name shows up as "not set", and Claude then sets it by its real name.
+- **REAPER's real plug-ins.** The self-test adds the plug-ins of the vocal chain and the limiter, and sets their controls. A control with a different name shows up as "not set", and the AI then sets it by its real name.
 - **REAPER's real renders.** With a recording in the project, the self-test checks that a track is measured on its own and at its true level, and that its fader is back where it was. How fast your REAPER renders also shows only there.
-- **Claude Desktop.** The installer starts RapReaper once, the way Claude does, and checks that it answers. The RapReaper tools appearing in Claude is the final proof.
+- **Your AI app.** The installer starts RapReaper once, the way an AI app does, and checks that it answers. The RapReaper tools appearing in your app is the final proof. RapReaper's side of the Local AI was checked with the same MCP calls llama.cpp makes; llama.cpp and the model themselves were not run in the build environment, so how well the model picks the tools is for you to judge.
 - **The sound.** The stand-in models what each plug-in does to levels, not every detail of its sound. Your ears make the final call.
 - **Real songs.** The effect detectors, the key finder and the alignment were checked on test material of known size, not yet on a commercial record: the first songs you learn from, and the first instrumental you line up, are that check.
 
@@ -507,13 +533,16 @@ Most problems are one of these. RapReaper's tools also say what is wrong in plai
 
 | What you see | Usual cause | Fix |
 | --- | --- | --- |
-| Claude has no RapReaper tools | Claude was not fully quit, or an update reset its settings | Quit Claude (Claude menu > Quit Claude, Cmd+Q) and reopen it. Still missing: run Install RapReaper.command again. |
+| Your AI app has no RapReaper tools | The app was not fully quit, it was installed after RapReaper, or an update reset its settings | Quit the app completely (Cmd+Q) and reopen it. Still missing: run Install RapReaper.command again; it connects every AI app it finds. |
+| The Local AI does not start | Get Local AI has not run yet, or a file in `LocalAI/runtime` is not the one it checked | Double-click Get Local AI.command again. Its window says exactly which file is wrong. |
+| The Local AI's chat window shows no RapReaper tools | llama.cpp did not get them while it started (it waits only 10 seconds for them) | Close the Local AI's window and double-click Start Local AI.command again. Start Local AI checks the tools first and starts llama.cpp a second time by itself when needed; its window says what it found. |
+| The Local AI is slow | An Intel Mac, or little memory | Close other programs; choose the 4B model (run Get Local AI.command again and pick 1). The first answer of a chat is always the slowest. |
 | The installer says the tool server "did not answer properly" or took long | The first start after an install, while the maths library loads | Run Install RapReaper.command once more; the second start is quick. If it happens again, the installer has saved the exact answer in `kit/state/installer_selfcheck.json`: send that file to whoever helps you (it holds no paths or names). |
 | "RapReaper cannot reach REAPER" | REAPER is closed, has just started, or a pop-up is waiting | Open REAPER, wait a minute, close any pop-up window, ask again. |
 | A small REAPER window with the words BRIDGE\_ALREADY\_RUNNING | REAPER was closed and started again within a minute | Harmless: close the window. The connection comes back by itself within a minute. |
 | Status says REAPER is still running the previous helper | You updated RapReaper and have not restarted REAPER since | Close REAPER completely and start it again. Everything but the newest tools works in the meantime. |
-| Claude says a newer RapReaper is installed than the one running | You updated RapReaper and Claude still runs the tool server it started before | Quit Claude completely (Claude menu > Quit Claude, or Cmd+Q) and open it again. Closing the window is not enough. |
-| Claude says a tool timed out or gave no answer | REAPER took longer than Claude waits for one tool (about a minute), or a pop-up held REAPER up | Say "check the status". Claude then carries on where the job stopped. On a Mac that renders slowly RapReaper measures shorter stretches from then on, and says so. |
+| The AI says a newer RapReaper is installed than the one running | You updated RapReaper and your AI app still runs the tool server it started before | Quit the app completely (Cmd+Q) and open it again; the Local AI: close its window and start it again. Closing a chat window is not enough. |
+| The AI says a tool timed out or gave no answer | REAPER took longer than the app waits for one tool (about a minute in most), or a pop-up held REAPER up | Say "check the status". The AI then carries on where the job stopped. On a Mac that renders slowly RapReaper measures shorter stretches from then on, and says so. |
 | "REAPER started a measurement ... and has not answered since" | REAPER is still rendering, a pop-up window is holding it up, or REAPER crashed or was closed during a measurement | If REAPER is open: wait for it, or close the pop-up, then ask again. If it crashed: start REAPER and ask again. RapReaper then clears what the crash left behind. |
 | Measurements come back silent | A soloed or muted track, a fader pulled all the way down, or REAPER's preference "Set media items offline when application is not active" | The error names the cause it found. For the preference, say "fix my setup", or run the self-test (both switch it off, and since 1.4.7 save that in REAPER's settings file so it stays off after REAPER restarts). |
 | "The disk ... has only X GB free" | The disk that holds RapReaper is nearly full; a render into a full disk would fail half-way | Free some space. Everything in `kit\captures` can go while REAPER is closed; old exports too. |
@@ -523,34 +552,34 @@ Most problems are one of these. RapReaper's tools also say what is wrong in plai
 | "This needs ... of audio rendered in one go, and on this Mac REAPER needs ..." | The project renders slower than usual (dozens of pitch plug-ins, say) but faster than real time, so each measurement or export has to be shorter | Ask again (RapReaper measures shorter stretches by itself), export a shorter part, or use File > Render for the whole song. Freezing the heaviest tracks (Track > Render/freeze tracks) makes every render faster. |
 | An error that names File > Render (normalizing, Mono, or "Add rendered items to new tracks") | The project's own render settings apply to every measurement and would falsify it | Change the setting the message names in File > Render, close the dialog with Save Settings, ask again. |
 | "A measurement did not follow the track's fader" | RapReaper has not yet checked how your REAPER renders a single track, or the render settings change levels | Say "run the self-test" with the recording in the project. |
-| A setting is listed as "not set" | A control has a different name in your REAPER version | Ask Claude to look up the real control names and set it. This is routine. |
-| Claude says the plan must be run again | The clips on the track changed, a saved chain was applied, or the measurement files were deleted | Say "plan the vocal again", then repeat your request. |
+| A setting is listed as "not set" | A control has a different name in your REAPER version | Ask the AI to look up the real control names and set it. This is routine. |
+| The AI says the plan must be run again | The clips on the track changed, a saved chain was applied, or the measurement files were deleted | Say "plan the vocal again", then repeat your request. |
 | "The open project has unsaved changes" when opening or closing a project | RapReaper never drops unsaved work on its own | Say whether to save first, drop the changes, or open the other project in a new tab. |
 | fit\_instrumental says the match is not clear | The two tracks do not hold the same music, or the overlap is short | Name a reference that really holds the same music (the old beat, or a vocal recorded over it), or move by a time instead. |
 | remaster finds only a project file | REAPER cannot open another program's project | Export the tracks as audio files as the answer describes, copy them into `kit\imports\<song>`, ask again. |
 | separate\_song or learn\_song\_effects says there is no way to separate | The model is not there yet, or the Vocal Remover is not allowed | Double-click Get Vocal Remover Model.command (it downloads and builds the model), or put the eight `MelRoformer-KimFT2-int8.onnx.part...` files in Downloads and run Install RapReaper.command again; it joins them and allows the program. |
 | The graphics test says "not enough memory" or "the parameter is incorrect" | The graphics chip or its driver cannot run the network | Nothing to fix: the Vocal Remover stays on the processor. A newer graphics driver sometimes helps; try the test again afterwards. |
 | The Vocal Remover's window does not open | The browser did not start | Copy the address shown in its black window (it starts with http://127.0.0.1) into any browser. |
-| "Set the final loudness" stops short of the target | Reaching it would take more than about 6 dB of limiting, which flattens a song | Usually leave it: streaming services turn loud songs down anyway. For a louder master, make the mix denser first ("heavier compression on the vocal"), or tell Claude to push harder regardless. |
+| "Set the final loudness" stops short of the target | Reaching it would take more than about 6 dB of limiting, which flattens a song | Usually leave it: streaming services turn loud songs down anyway. For a louder master, make the mix denser first ("heavier compression on the vocal"), or tell the AI to push harder regardless. |
 | "cannot be opened because it is from an unidentified developer", or a `.command` file does nothing | macOS's download quarantine | System Settings > Privacy & Security, scroll down, Open Anyway; then double-click again. After the installer has run once, it releases every RapReaper file it shipped. |
 | The installer refuses the folder | The RapReaper folder is in Downloads, Desktop, Documents or a cloud folder | Move it to your home folder (`/Users/<your name>/RapReaper`) and run the installer again. |
-| REAPER or Claude cannot see a file | macOS has not given that program permission for a folder | Keep everything inside the RapReaper folder in your home folder; System Settings > Privacy & Security > Files and Folders shows what each program may read. |
+| REAPER or your AI app cannot see a file | macOS has not given that program permission for a folder | Keep everything inside the RapReaper folder in your home folder; System Settings > Privacy & Security > Files and Folders shows what each program may read. |
 | The voice is in one ear only | The mic was recorded on a stereo input | Click the clip, press F2 and set Channel mode to Mono (left) or Mono (right), whichever side has the voice. Record new takes on a Mono input. |
 | No sound, or you cannot record | REAPER is not using your interface | Options > Preferences > Audio > Device ("AUDIO INTERFACE SETUP.txt"). |
 | The installer says Python is missing or unsuitable, or a `.command` file says "no Python 3.12" | Only Apple's stub `python3` is present, or Python is older than 3.12 | Install Python from python.org (set-up step 4) or with Homebrew, then double-click the installer again. |
 | The vocal sounds worse | Too much of something, or simply taste | "Switch the chain off and on", then "lighter compression" or "less de-essing", or "take the last step back". |
 
-For deeper digging, Claude keeps a log for RapReaper called `mcp-server-rapreaper.log`. In Claude, Help > Troubleshooting > Show Logs opens its folder: `~/Library/Logs/Claude`. RapReaper's own record of what it sent is `kit/logs/sent_to_claude.log`.
+For deeper digging, Claude keeps a log for RapReaper called `mcp-server-rapreaper.log`. In Claude, Help > Troubleshooting > Show Logs opens its folder: `~/Library/Logs/Claude`. Other apps show their MCP logs in their own settings; the Local AI's is `kit/state/local_ai/llama-server.log`. RapReaper's own record of what it sent is `kit/logs/sent_to_ai.log`.
 
 ## Keeping it working
 
-RapReaper itself uses nothing online (Claude does), so it keeps working until something around it changes. When that happens, run the installer and the self-test again.
+RapReaper itself uses nothing online (an online AI app does), so it keeps working until something around it changes. When that happens, run the installer and the self-test again.
 
 | When | Do this |
 | --- | --- |
 | A new RapReaper zip | Put it in Downloads, double-click Update RapReaper.command, then restart REAPER. |
-| REAPER updates | Ask Claude to run the self-test, with a recording in the project. Control names and the way REAPER renders can change between versions, and the test catches both. |
-| Claude Desktop updates | If the RapReaper tools vanish, run Install RapReaper.command again. If Claude asks permission again, choose Always allow. |
+| REAPER updates | Ask the AI to run the self-test, with a recording in the project. Control names and the way REAPER renders can change between versions, and the test catches both. |
+| Your AI app updates | If the RapReaper tools vanish, run Install RapReaper.command again. If the app asks permission again, choose Always allow. |
 | macOS updates | Usually nothing. If a `.command` file is refused again, allow it once more in System Settings > Privacy & Security. |
 | You install a new Python | Run Install RapReaper.command again; it rebuilds RapReaper's own environment with it. |
 | You move the RapReaper folder | Run Install RapReaper.command again from the new place (keep it in your home folder). |
@@ -561,11 +590,11 @@ RapReaper itself uses nothing online (Claude does), so it keeps working until so
 
 Housekeeping is automatic. `kit/captures` holds the measurement files: RapReaper keeps the newest ones, about 1.5 GB at most, plus those your vocal sessions of the last 45 days still need for their before/after tables, and removes measurement files, vocal-session notes and the activity log older than 30 days. You may empty `kit/captures` at any time; the next vocal step then asks for a fresh plan. Exports and imports are yours to move or delete.
 
-For comfort, create a Project called "Mixing" in Claude and start your sessions there, so the chats stay together.
+For comfort, in Claude create a Project called "Mixing" and start your sessions there, so the chats stay together (other apps have their own ways to keep chats together).
 
 ## Why REAPER instead of Pro Tools
 
-Pro Tools cannot be driven this way. Its scripting interface (Avid's Scripting SDK) can open and save sessions, import and export audio, run the transport and handle markers and clips. It has no command to insert a plug-in, set a plug-in's controls or move a fader, so Claude could not turn an EQ or a compressor there. REAPER's scripting can add any plug-in, read and set every control, and render a track to a file for measuring, which is exactly what RapReaper needs.
+Pro Tools cannot be driven this way. Its scripting interface (Avid's Scripting SDK) can open and save sessions, import and export audio, run the transport and handle markers and clips. It has no command to insert a plug-in, set a plug-in's controls or move a fader, so an AI could not turn an EQ or a compressor there. REAPER's scripting can add any plug-in, read and set every control, and render a track to a file for measuring, which is exactly what RapReaper needs.
 
 You can keep recording or producing in Pro Tools, FL Studio or any other program and mix in REAPER: the section "Remastering a song from another program" says how to export the tracks and bring them in with one request.
 

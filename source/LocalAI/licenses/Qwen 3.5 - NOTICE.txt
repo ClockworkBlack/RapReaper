@@ -1,0 +1,16 @@
+Qwen 3.5 (Qwen3.5-4B and Qwen3.5-9B), by the Qwen team, Alibaba Cloud
+=====================================================================
+
+Licence: Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+Model pages: https://huggingface.co/Qwen/Qwen3.5-4B and https://huggingface.co/Qwen/Qwen3.5-9B
+GGUF files used: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF (revision e87f176479d0855a907a41277aca2f8ee7a09523)
+                 https://huggingface.co/unsloth/Qwen3.5-9B-GGUF (revision 3885219b6810b007914f3a7950a8d1b469d598a5)
+
+The model files are not part of RapReaper and are not covered by RapReaper's licence. RapReaper does not pass them on:
+"Get Local AI" downloads them on the person's own computer from the addresses above, and checks each against its
+published SHA-256:
+
+  Qwen3.5-4B-Q4_K_M.gguf  2,740,937,888 bytes  00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4
+  Qwen3.5-9B-Q4_K_M.gguf  5,680,522,464 bytes  03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8
+
+The full licence text is on the model pages above and at the Apache Software Foundation's address.

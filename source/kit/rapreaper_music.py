@@ -3,7 +3,7 @@ mix engineer looks up (loudness targets, where things live in the sound, usual c
 
 Everything here is computed or looked up on this computer; nothing is fetched from anywhere. The detectors
 work on plain audio arrays (numpy) and return dictionaries with a `confidence` figure and plain-word notes, so
-that Claude can say how sure the finding is instead of guessing.
+that the AI can say how sure the finding is instead of guessing.
 
   tempo(x, sr)         beats per minute of a beat or a song, with the half- and double-time readings
   key(x, sr)           the key of a beat (polyphonic: chords and bass, not a single sung line)

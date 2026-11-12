@@ -14,15 +14,22 @@ It is safe to run again at any time; it only ever touches these things:
      into REAPER's Effects folder. A copy of __startup.lua is kept before any change. If REAPER is closed and its preference
      'Set media items offline when application is not active' is on (RapReaper cannot
      measure with it on), the installer switches it off in reaper.ini, keeping a copy.
-  3. Claude Desktop: adds one "rapreaper" entry to claude_desktop_config.json so Claude can
-     start the RapReaper tool server. A copy of the file is kept before any change.
+  3. AI apps: adds one "rapreaper" entry to the MCP settings of every AI app it finds (Claude Desktop, ChatGPT's
+     desktop app and Codex, Cursor, VS Code, Windsurf, LM Studio, Gemini CLI), so the app can start the RapReaper tool
+     server. A copy of each file is kept before any change. Any other app that speaks MCP gets the same settings by hand
+     (kit/state/ai_app_settings.txt); RapReaper's own Local AI (Get Local AI, then Start Local AI) needs none.
 
 It does not need administrator rights, does not open any network port, and sends
 nothing anywhere (pip downloads the two packages from the official Python index).
 
 Options:
   --check        change nothing; report what is and is not set up
-  --uninstall    remove the REAPER block and the Claude entry (this folder is left alone)
+  --uninstall    remove the REAPER block and the AI apps' entries (this folder is left alone)
+  --ai-apps LIST which AI apps to connect: all (the default), none, or some of claude, chatgpt, cursor, vscode,
+                 vscode-insiders, windsurf, lmstudio, gemini (remembered)
+  --local-ai     start RapReaper's Local AI (what Start Local AI does); --think lets the model reason first (slower),
+                 --cpu keeps it off the graphics processor
+  --local-ai-check [MODEL]   check the Local AI's files after Get Local AI (what Get Local AI does at its end)
   --no-pip       do not install or upgrade Python packages
   --reaper-resource-dir PATH   for a portable REAPER install (the folder with reaper.ini);
                  it is remembered, so "Check" and "Uninstall" later look in the same place
@@ -61,7 +68,7 @@ import unicodedata
 import zipfile
 import zlib
 
-VERSION = "1.4.7"
+VERSION = "1.5.0"
 HERE = os.path.dirname(os.path.abspath(__file__))
 KIT = os.path.join(HERE, "kit")
 BRIDGE_ROOT = os.path.join(KIT, "reaper-daemon")
@@ -193,7 +200,7 @@ def check_python():
     low = exe.lower()
     if PF.IS_WINDOWS and "windowsapps" in low and "pythonsoftwarefoundation.python." in low:
         todo("This is the old Microsoft Store edition of Python, which keeps its own private copy of some folders, so "
-             "REAPER and Claude would not see what it writes. Install Python from https://www.python.org/downloads/windows/ "
+             "REAPER and your AI app would not see what it writes. Install Python from https://www.python.org/downloads/windows/ "
              "instead and run this installer again.")
         return False
     ok("Python %s  (%s)" % (ver, exe))
@@ -257,7 +264,7 @@ def check_location():
     elif PF.IS_WINDOWS and HERE.startswith("\\\\"):
         bad = "it is on a network share"
     elif PF.IS_WINDOWS and (_under(HERE, os.environ.get("APPDATA")) or _under(HERE, os.environ.get("LOCALAPPDATA"))):
-        bad = "it is inside AppData, where Windows gives the Claude app a private copy of files"
+        bad = "it is inside AppData, where Windows gives packaged apps (Claude and ChatGPT among them) a private copy of files"
     elif PF.IS_WINDOWS and (any(_under(HERE, os.environ.get(k)) for k in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"))
                             or "onedrive" in HERE.lower()):
         bad = "it is inside OneDrive, which moves and locks files while they sync"
@@ -271,9 +278,9 @@ def check_location():
         elif _under(HERE, os.path.join(prof, "Library", "CloudStorage")):
             bad = "it is inside a cloud folder (Dropbox, Google Drive or OneDrive), which syncs and locks files while they are in use"
         else:
-            bad = "it is inside the hidden Library folder, where the Claude app and REAPER are not meant to find it"
+            bad = "it is inside the hidden Library folder, where your AI app and REAPER are not meant to find it"
     elif PF.IS_MAC and prof and any(_under(HERE, os.path.join(prof, d)) for d in ("Downloads", "Desktop", "Documents")):
-        bad = ("it is in your %s folder. macOS protects that folder: Terminal, REAPER and Claude would each have to be given "
+        bad = ("it is in your %s folder. macOS protects that folder: Terminal, REAPER and your AI app would each have to be given "
                "permission to use it, and when one of them is refused, RapReaper fails without a clear reason"
                % next(d for d in ("Downloads", "Desktop", "Documents") if _under(HERE, os.path.join(prof, d))))
     elif PF.IS_MAC and (_under(HERE, os.environ.get("TMPDIR")) or HERE.startswith("/tmp") or HERE.startswith("/private/tmp")):
@@ -322,7 +329,7 @@ def _runs(python):
 
 
 def server_python():
-    """The Python that runs the tool server (the one Claude is pointed at). On Windows the Python this installer runs
+    """The Python that runs the tool server (the one the AI apps are pointed at). On Windows the Python this installer runs
     with; on a Mac RapReaper's own environment inside the kit folder, once it exists."""
     if PF.IS_WINDOWS:
         return sys.executable
@@ -756,7 +763,7 @@ def helper_file_ok():
 
 
 OFFLINE_KEY = b"offlineinact"        # reaper.ini, [REAPER]: 'Set media items offline when application is not active'
-OFFLINE_WHY = ("With it on, REAPER unloads the audio whenever another window (such as Claude) is in front, and every "
+OFFLINE_WHY = ("With it on, REAPER unloads the audio whenever another window (such as your AI app) is in front, and every "
                "measurement RapReaper makes comes back silent.")
 
 
@@ -819,7 +826,7 @@ def setup_offline_preference(res, check_only):
         return True
     if check_only:
         todo("REAPER's preference %s is ON. %s Run the installer again with REAPER closed (it switches it off), or run "
-             "RapReaper's self-test from Claude with REAPER open (it does the same)." % (name, OFFLINE_WHY))
+             "RapReaper's self-test from your AI app with REAPER open (it does the same)." % (name, OFFLINE_WHY))
         return False
     if reaper_running():
         info("REAPER's preference %s is ON, and REAPER is open now, so this installer leaves reaper.ini alone (REAPER "
@@ -1026,8 +1033,13 @@ def remove_reaper(resource_arg):
 
 
 # --------------------------------------------------------------------------------------------
-# 5. Claude Desktop
+# 5. AI apps (1.5.0: every app on this computer that speaks MCP, not only Claude Desktop)
 # --------------------------------------------------------------------------------------------
+# RapReaper is an MCP server: the installer adds one "rapreaper" entry to the MCP settings of every AI app it can find
+# (PF.ai_apps(): Claude, ChatGPT's desktop app and Codex, Cursor, VS Code, Windsurf, LM Studio, Gemini CLI), each file
+# backed up first and checked again after writing; any other app that speaks MCP gets the same three settings by hand
+# (kit/state/ai_app_settings.txt). RapReaper's own Local AI (Get Local AI, then Start Local AI) needs none of this.
+# "--ai-apps claude,chatgpt" (or "none", or "all", the default) chooses, and is remembered.
 
 def claude_config_dirs():
     return PF.claude_config_dirs()
@@ -1035,6 +1047,14 @@ def claude_config_dirs():
 
 def rapreaper_entry():
     return {"command": server_python(), "args": [SERVER], "env": {"RAPREAPER_HOME": KIT}}
+
+
+def _app_entry(form):
+    """The "rapreaper" entry in the form one app's settings file takes (VS Code's mcp.json names the transport)."""
+    e = rapreaper_entry()
+    if form == "servers":
+        return {"type": "stdio", "command": e["command"], "args": e["args"], "env": e["env"]}
+    return e
 
 
 def _load_config(path):
@@ -1063,86 +1083,771 @@ def _load_config(path):
     return data, None
 
 
-def setup_claude(check_only):
-    step(5, "Claude Desktop")
-    # A folder counts when it is there, when the person named it (RAPREAPER_CLAUDE_CONFIG_DIRS), or when it is the
-    # private settings place of an installed Windows-Store-style Claude that has not been started yet.
-    packaged = os.path.normcase(os.path.join("LocalCache", "Roaming", "Claude"))
-    present = [d for d in claude_config_dirs()
-               if os.path.isdir(d) or os.environ.get("RAPREAPER_CLAUDE_CONFIG_DIRS") or os.path.normcase(d).endswith(packaged)]
-    if not present:
-        todo("Claude Desktop does not seem to be installed, or has never been started on this computer. Get it from "
-             "https://claude.com/download , start it and sign in once, close it, then run this installer again.")
-        return False
-    entry = rapreaper_entry()
-    done = 0
-    for d in present:
-        path = os.path.join(d, "claude_desktop_config.json")
-        cfg, why = _load_config(path)
-        if cfg is None:
-            todo("Claude's settings file could not be read (%s): %s. Nothing was changed. Open it in Claude (Settings > "
-                 "Developer > Edit Config), fix or empty it, and run this installer again." % (path, why))
-            continue
-        servers = cfg.get("mcpServers")
-        if servers is None:
-            servers = {}
-        if not isinstance(servers, dict):
-            todo("In %s, \"mcpServers\" is not a JSON object. Nothing was changed." % path)
-            continue
-        if servers.get("rapreaper") == entry:
-            ok("RapReaper is already in %s" % path)
-            done += 1
-            continue
+_JSONC_PART = re.compile(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/', re.S)
+
+
+def _jsonc_note(path):
+    """When a settings file is not plain JSON but would be with its comments taken out (VS Code and Gemini CLI allow
+    comments): the words for that; otherwise None."""
+    try:
+        with open(path, "rb") as f:
+            text = f.read().decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+    stripped = _JSONC_PART.sub(lambda m: m.group(0) if m.group(0).startswith('"') else "", text)
+    stripped = re.sub(r",(\s*[}\]])", r"\1", stripped)
+    try:
+        json.loads(stripped)
+    except ValueError:
+        return None
+    return ("it has comments in it, which this app allows; RapReaper does not rewrite such a file, because the comments "
+            "would be lost")
+
+
+# ---- ChatGPT's desktop app and Codex: ~/.codex/config.toml ----------------------------------------------------------
+CODEX_MARK = "# RapReaper (added by RapReaper's installer; Uninstall RapReaper takes it out again)"
+_TOML_HEADER = re.compile(r"^\s*\[\[?\s*(.+?)\s*\]\]?\s*(?:#.*)?$")
+_TOML_KEY_PART = re.compile(r'"((?:\\.|[^"\\])*)"|\'([^\']*)\'|([A-Za-z0-9_-]+)')
+
+
+def _toml_str(text):
+    return json.dumps(str(text), ensure_ascii=False)          # (a JSON string is a valid TOML basic string)
+
+
+def _codex_entry():
+    e = rapreaper_entry()
+    return {"command": e["command"], "args": e["args"], "env": e["env"], "startup_timeout_sec": 60, "tool_timeout_sec": 120}
+
+
+def _codex_block():
+    e = _codex_entry()
+    lines = [CODEX_MARK, "[mcp_servers.rapreaper]", "command = %s" % _toml_str(e["command"]),
+             "args = [%s]" % ", ".join(_toml_str(a) for a in e["args"]),
+             "startup_timeout_sec = %d" % e["startup_timeout_sec"], "tool_timeout_sec = %d" % e["tool_timeout_sec"], "",
+             "[mcp_servers.rapreaper.env]"] + ["%s = %s" % (k, _toml_str(v)) for k, v in e["env"].items()]
+    return "\n".join(lines) + "\n"
+
+
+def _toml_path(inner):
+    return tuple(next(g for g in m.groups() if g is not None) for m in _TOML_KEY_PART.finditer(inner))
+
+
+def _codex_without_rapreaper(text):
+    """config.toml's text with the [mcp_servers.rapreaper] table, its sub-tables and RapReaper's comment line taken out."""
+    out, skipping = [], False
+    for line in text.splitlines(keepends=True):
+        m = _TOML_HEADER.match(line)
+        if m:
+            skipping = _toml_path(m.group(1))[:2] == ("mcp_servers", "rapreaper")
+            if skipping:
+                while out and out[-1].strip() in (CODEX_MARK, ""):
+                    out.pop()
+                continue
+        if not skipping:
+            out.append(line)
+    text = "".join(out)
+    return text if not text or text.endswith("\n") else text + "\n"
+
+
+def _plain(data):
+    return json.loads(json.dumps(data, default=str))
+
+
+def _without_entry(cfg):
+    cfg = _plain(cfg)
+    servers = cfg.get("mcp_servers")
+    if isinstance(servers, dict):
+        servers.pop("rapreaper", None)
+        if not servers:
+            cfg.pop("mcp_servers", None)
+    return cfg
+
+
+def _codex_edit(text, add):
+    """The new config.toml text (with RapReaper's entry when add, without it otherwise), or (None, why). The result is
+    read back with Python's own TOML reader: everything else in the file must read exactly as before, or nothing is
+    written."""
+    import tomllib
+    try:
+        before = tomllib.loads(text) if text.strip() else {}
+    except (tomllib.TOMLDecodeError, ValueError) as e:
+        return None, "it is not valid TOML (%s)" % e
+    base = _codex_without_rapreaper(text)
+    new = (base + ("\n" if base.strip() else "") + _codex_block()) if add else base
+    try:
+        after = tomllib.loads(new) if new.strip() else {}
+    except (tomllib.TOMLDecodeError, ValueError):
+        return None, "RapReaper could not place its entry in it without changing other lines (an unusual layout)"
+    entry = _plain((after.get("mcp_servers") or {}).get("rapreaper"))
+    if _without_entry(after) != _without_entry(before) or (add and entry != _plain(_codex_entry())) or (not add and entry):
+        return None, "RapReaper could not place its entry in it without changing other lines (an unusual layout)"
+    return new, None
+
+
+def _read_text(path):
+    """(text, problem) of a settings file; a missing file is empty."""
+    if not os.path.isfile(path):
+        return "", None
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+    except OSError as e:
+        return None, str(e)
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return None, "it is saved as UTF-16 text; save it as UTF-8"
+    try:
+        return raw.decode("utf-8-sig"), None
+    except UnicodeDecodeError:
+        return None, "it is not saved as UTF-8 text"
+
+
+def _connect_codex(app, path, check_only):
+    text, why = _read_text(path)
+    if text is not None:
+        import tomllib
+        try:
+            current = (tomllib.loads(text).get("mcp_servers") or {}).get("rapreaper") if text.strip() else None
+        except (tomllib.TOMLDecodeError, ValueError):
+            current = None
+        if current is not None and _plain(current) == _plain(_codex_entry()):
+            ok("RapReaper is already in %s (%s)" % (path, app["name"]))
+            return True
         if check_only:
-            todo("RapReaper is NOT in %s (run the installer)" % path)
-            continue
-        try:
-            servers["rapreaper"] = entry
-            cfg["mcpServers"] = servers
-            text = json.dumps(cfg, indent=2, allow_nan=False) + "\n"
-        except ValueError:
-            todo("Claude's settings file (%s) contains a number that is not valid JSON (infinity or 'not a number'). "
-                 "Nothing was changed. Open it in Claude (Settings > Developer > Edit Config), fix that value, and "
-                 "run this installer again." % path)
-            continue
-        try:
-            if os.path.isfile(path):
-                info("kept a copy: %s" % backup(path))
-            write_atomic(path, text)
-        except OSError as e:
-            todo("Claude's settings file could not be written (%s): %s. If it is marked read-only, clear that in its "
-                 "Properties and run this installer again." % (path, e))
-            continue
-        ok("added RapReaper to %s" % path)
-        done += 1
-    if done and not check_only:
-        info("Claude only reads this file when it starts: %s." % PF.quit_claude_how())
-    return bool(done)
-
-
-def remove_claude():
-    for d in claude_config_dirs():
-        path = os.path.join(d, "claude_desktop_config.json")
-        cfg, why = _load_config(path)
-        if not cfg or not isinstance(cfg.get("mcpServers"), dict) or "rapreaper" not in cfg["mcpServers"]:
-            if cfg is None and os.path.isfile(path):
-                todo("Claude's settings file could not be read (%s): %s. If RapReaper is listed in it, remove the "
-                     "\"rapreaper\" entry by hand (Claude: Settings > Developer > Edit Config)." % (path, why))
-            continue
-        try:
-            del cfg["mcpServers"]["rapreaper"]
-            text = json.dumps(cfg, indent=2, allow_nan=False) + "\n"
-        except ValueError:
-            todo("Claude's settings file (%s) contains a number that is not valid JSON, so it was left untouched. "
-                 "Remove the \"rapreaper\" entry by hand (Claude: Settings > Developer > Edit Config)." % path)
-            continue
-        try:
+            todo("RapReaper is NOT in %s (%s; run the installer)" % (path, app["name"]))
+            return False
+        new, why = _codex_edit(text, True)
+    if text is None or new is None:
+        todo("The settings file of %s could not be changed (%s): %s. Nothing was changed. Add RapReaper to it by hand: "
+             "the lines are in kit\\state\\ai_app_settings.txt." % (app["name"], path, why))
+        return False
+    try:
+        if os.path.isfile(path):
             info("kept a copy: %s" % backup(path))
-            write_atomic(path, text)
-        except OSError as e:
-            todo("RapReaper could not be removed from %s: %s." % (path, e))
+        write_atomic(path, new)
+    except OSError as e:
+        todo("The settings file of %s could not be written (%s): %s." % (app["name"], path, e))
+        return False
+    ok("added RapReaper to %s (%s)" % (path, app["name"]))
+    return True
+
+
+def _connect_json(app, path, check_only):
+    key = "servers" if app["form"] == "servers" else "mcpServers"
+    entry = _app_entry(app["form"])
+    cfg, why = _load_config(path)
+    if cfg is None:
+        note = _jsonc_note(path)
+        if note:
+            info("%s: %s is left as it is: %s. To use RapReaper there, add the \"rapreaper\" entry by hand (%s); the "
+                 "lines are in kit\\state\\ai_app_settings.txt." % (app["name"], path, note, app["where"]))
+            return False
+        todo("The settings file of %s could not be read (%s): %s. Nothing was changed. Open it (%s), fix or empty it, "
+             "and run this installer again." % (app["name"], path, why, app["where"]))
+        return False
+    servers = cfg.get(key)
+    if servers is None:
+        servers = {}
+    if not isinstance(servers, dict):
+        todo("In %s (%s), \"%s\" is not a JSON object. Nothing was changed." % (path, app["name"], key))
+        return False
+    if servers.get("rapreaper") == entry:
+        ok("RapReaper is already in %s" % path if app["id"] == "claude" else "RapReaper is already in %s (%s)" % (path, app["name"]))
+        return True
+    if check_only:
+        todo("RapReaper is NOT in %s (run the installer)" % path if app["id"] == "claude"
+             else "RapReaper is NOT in %s (%s; run the installer)" % (path, app["name"]))
+        return False
+    try:
+        servers["rapreaper"] = entry
+        cfg[key] = servers
+        text = json.dumps(cfg, indent=2, allow_nan=False) + "\n"
+    except ValueError:
+        todo("The settings file of %s (%s) contains a number that is not valid JSON (infinity or 'not a number'). "
+             "Nothing was changed. Open it (%s), fix that value, and run this installer again." % (app["name"], path, app["where"]))
+        return False
+    try:
+        if os.path.isfile(path):
+            info("kept a copy: %s" % backup(path))
+        write_atomic(path, text)
+    except OSError as e:
+        todo("The settings file of %s could not be written (%s): %s. If it is marked read-only, clear that in its "
+             "Properties and run this installer again." % (app["name"], path, e))
+        return False
+    ok("added RapReaper to %s" % path if app["id"] == "claude" else "added RapReaper to %s (%s)" % (path, app["name"]))
+    return True
+
+
+AI_APP_IDS = ("claude", "chatgpt", "cursor", "vscode", "vscode-insiders", "windsurf", "lmstudio", "gemini")
+
+
+def _ai_app_choice():
+    """Which apps the installer connects: "all" (the default), "none", or a list of ids (--ai-apps, remembered)."""
+    choice = _install_notes().get("ai_apps") or "all"
+    return choice if choice in ("all", "none") or isinstance(choice, list) else "all"
+
+
+def set_ai_apps(arg):
+    """--ai-apps: remember which apps to connect, then say what that means. Returns an exit code."""
+    words = [w.strip().lower() for w in re.split(r"[,\s]+", str(arg or "")) if w.strip()]
+    if words in (["all"], ["none"]):
+        choice = words[0]
+    else:
+        bad = [w for w in words if w not in AI_APP_IDS]
+        if bad or not words:
+            say("--ai-apps takes all, none, or names from: %s (not: %s)." % (", ".join(AI_APP_IDS), ", ".join(bad) or "nothing"))
+            return 2
+        choice = sorted(set(words))
+    _remember(ai_apps=choice)
+    say("From now on the installer connects RapReaper to %s. Run Install RapReaper again to apply it (it takes RapReaper "
+        "out of no app by itself: Uninstall RapReaper does that, for all of them)."
+        % ("every AI app it finds" if choice == "all" else "no AI app (you add it to yours by hand)" if choice == "none"
+           else ", ".join(choice)))
+    return 0
+
+
+NO_AI_APP = ("No AI app was found on this computer to connect RapReaper to. The free, private way: double-click "
+             "Get Local AI.bat once (it downloads an open AI model, about 3 to 6 GB, that runs on this computer), then "
+             "Start Local AI.bat. Or install an app that speaks MCP (Claude, ChatGPT's desktop app, LM Studio, Cursor, "
+             "VS Code, Windsurf, Gemini CLI ...), start it once, and run this installer again. Another app that speaks "
+             "MCP works too: add RapReaper to it with the settings in kit\\state\\ai_app_settings.txt, then run this "
+             "installer once with --ai-apps none.")
+
+
+AI_APPS_CONNECTED = []         # the apps step 5 connected in this run (finish() names them)
+
+
+def setup_ai_apps(check_only):
+    step(5, "AI apps (Claude, ChatGPT, Cursor, VS Code, LM Studio ... or RapReaper's Local AI)")
+    choice = _ai_app_choice()
+    connected, left_out, chosen = AI_APPS_CONNECTED, [], []
+    for app in PF.ai_apps():
+        if not app["present"]:
             continue
-        ok("removed RapReaper from %s (restart Claude)" % path)
+        if choice != "all" and (choice == "none" or app["id"] not in choice):
+            left_out.append(app["name"])
+            continue
+        chosen.append(app["name"])
+        for path in app["files"]:
+            done = _connect_codex(app, path, check_only) if app["form"] == "codex" else _connect_json(app, path, check_only)
+            if done and app["name"] not in connected:
+                connected.append(app["name"])
+    local = local_ai_state()
+    if local["ready"]:
+        ok("RapReaper's Local AI is ready (%s, on this computer): double-click %s to use it"
+           % (local["label"], PF.launcher("Start Local AI")))
+    elif local["runtime"] or local["model"]:
+        info("RapReaper's Local AI is not complete yet (%s): double-click %s again."
+             % ("the AI model is missing" if local["runtime"] else "llama.cpp is missing", PF.launcher("Get Local AI")))
+    if left_out:
+        info("left out, as chosen with --ai-apps: %s" % ", ".join(left_out))
+    if not check_only:
+        try:
+            write_atomic(os.path.join(KIT, "state", "ai_app_settings.txt"), ai_app_settings_text())
+        except OSError:
+            pass
+    if not chosen and not local["ready"] and choice != "none":
+        todo(NO_AI_APP)
+        return False
+    if connected and not check_only:
+        if "Claude" in connected:
+            info("Claude only reads its settings when it starts: %s." % PF.quit_claude_how())
+        others = [n for n in connected if n != "Claude"]
+        if others:
+            info("%s read%s their settings when they start: quit %s and open %s again (a terminal app: start a new "
+                 "session)." % (", ".join(others), "" if len(others) > 1 else "s", "them" if len(others) > 1 else "it",
+                                "them" if len(others) > 1 else "it"))
+    info("Any other AI app that speaks MCP works too: kit\\state\\ai_app_settings.txt has the settings to add by hand.")
+    return True
+
+
+def ai_app_settings_text():
+    """kit/state/ai_app_settings.txt: RapReaper's settings for an AI app the installer cannot set up by itself."""
+    e = rapreaper_entry()
+    j = lambda d: json.dumps(d, indent=2)
+    lines = [
+        "RapReaper's settings for any AI app that speaks MCP (the Model Context Protocol)",
+        "=" * 80,
+        "Written by RapReaper's installer %s. This file stays on this computer; it holds the paths of this one." % VERSION,
+        "",
+        "Most apps ask for three things when you add a local MCP server (type \"stdio\", \"local\" or \"command\"):",
+        "",
+        "  Name:         rapreaper",
+        "  Command:      %s" % e["command"],
+        "  Arguments:    %s" % e["args"][0],
+        "  Environment:  RAPREAPER_HOME = %s" % e["env"]["RAPREAPER_HOME"],
+        "",
+        "Optional: RAPREAPER_TOOLS = core  (28 tools instead of 57, for a small AI model or an app that takes few tools)",
+        "",
+        "An app with an mcpServers file (Claude Desktop, Cursor, Windsurf, LM Studio, Gemini CLI, Cline, Kiro and many more):",
+        "",
+        j({"mcpServers": {"rapreaper": e}}),
+        "",
+        "VS Code (mcp.json; also Visual Studio's .mcp.json):",
+        "",
+        j({"servers": {"rapreaper": _app_entry("servers")}}),
+        "",
+        "ChatGPT's desktop app and Codex (.codex/config.toml in your user folder):",
+        "",
+        _codex_block().rstrip("\n"),
+        "",
+        "Zed (settings.json):",
+        "",
+        j({"context_servers": {"rapreaper": e}}),
+        "",
+        "Claude Code (one line in a terminal):",
+        "",
+        "  claude mcp add --scope user rapreaper -e RAPREAPER_HOME=%s -- %s %s"
+        % (_shell_word(e["env"]["RAPREAPER_HOME"]), _shell_word(e["command"]), _shell_word(e["args"][0])),
+        "",
+        "Apps that only take a web address (ChatGPT in a browser, Claude on the web) cannot reach a program on your",
+        "computer: RapReaper opens no network port, on purpose. Use the desktop app, or RapReaper's Local AI.",
+        "",
+        "After adding it, quit the app completely and open it again, start REAPER, and ask: Run the RapReaper self-test",
+    ]
+    return PF.wording("\n".join(lines)) + "\n"
+
+
+def _shell_word(text):
+    text = str(text)
+    if re.fullmatch(r"[A-Za-z0-9_./:\\-]+", text):
+        return text
+    return '"%s"' % text.replace('"', '\\"')
+
+
+def remove_ai_apps():
+    """Uninstall: take RapReaper's entry out of every AI app's settings file that has one (found or not)."""
+    for app in PF.ai_apps():
+        for path in app["files"]:
+            if app["form"] == "codex":
+                text, why = _read_text(path)
+                if not text or "rapreaper" not in text:
+                    continue
+                new, why = _codex_edit(text, False)
+                if new is None:
+                    todo("RapReaper could not be taken out of %s (%s): %s. Remove the [mcp_servers.rapreaper] lines by hand."
+                         % (path, app["name"], why))
+                    continue
+            else:
+                key = "servers" if app["form"] == "servers" else "mcpServers"
+                cfg, why = _load_config(path)
+                if not cfg or not isinstance(cfg.get(key), dict) or "rapreaper" not in cfg[key]:
+                    if cfg is None and os.path.isfile(path) and not _jsonc_note(path):
+                        todo("The settings file of %s could not be read (%s): %s. If RapReaper is listed in it, remove the "
+                             "\"rapreaper\" entry by hand (%s)." % (app["name"], path, why, app["where"]))
+                    elif cfg is None and os.path.isfile(path):
+                        info("%s: %s has comments, so it was left as it is; remove a \"rapreaper\" entry there by hand if "
+                             "you added one." % (app["name"], path))
+                    continue
+                try:
+                    del cfg[key]["rapreaper"]
+                    new = json.dumps(cfg, indent=2, allow_nan=False) + "\n"
+                except ValueError:
+                    todo("The settings file of %s (%s) contains a number that is not valid JSON, so it was left untouched. "
+                         "Remove the \"rapreaper\" entry by hand (%s)." % (app["name"], path, app["where"]))
+                    continue
+            try:
+                info("kept a copy: %s" % backup(path))
+                write_atomic(path, new)
+            except OSError as e:
+                todo("RapReaper could not be removed from %s: %s." % (path, e))
+                continue
+            ok("removed RapReaper from %s (restart %s)" % (path, app["name"]))
+
+
+# --------------------------------------------------------------------------------------------
+# RapReaper's Local AI (1.5.0): an open AI model on this computer, through llama.cpp
+# --------------------------------------------------------------------------------------------
+# "Get Local AI" (a separate double-click file, like the other Get files: the only place besides pip that downloads)
+# fetches one pinned llama.cpp build (llama-server, MIT licence) and one pinned open model (Qwen 3.5, Apache 2.0), each
+# checked against its published SHA-256, into LocalAI/runtime and LocalAI/models. "Start Local AI" (--local-ai) checks
+# every runtime file against LocalAI/runtime-<build>.json (shipped in the zip, so covered by MANIFEST.sha256), refuses
+# any file there that is not llama.cpp's own (llama.cpp loads every ggml library next to it), checks the model against
+# its checksum, then starts llama-server on 127.0.0.1 with RapReaper as its MCP server (the core tools) and opens its
+# chat window in the browser. llama-server itself refuses other computers and other web pages (its Host and Origin
+# checks), and its chat window asks the person before every tool call. RapReaper's own Python still has no network
+# code: it starts a program and a browser.
+
+LOCAL_AI_DIR = os.path.join(HERE, "LocalAI")
+LOCAL_AI_RUNTIME = os.path.join(LOCAL_AI_DIR, "runtime")
+LOCAL_AI_MODELS = os.path.join(LOCAL_AI_DIR, "models")
+LOCAL_AI_BUILD = "b12250"              # llama.cpp's release of 10 November 2026 (llama-server runs MCP servers over stdio)
+LOCAL_AI_FILES = os.path.join(LOCAL_AI_DIR, "runtime-%s.json" % LOCAL_AI_BUILD)
+# The models Get Local AI offers (Qwen's own Qwen 3.5, as GGUF files by unsloth on Hugging Face), with their published
+# checksums. The 4B fits a computer with 8 GB of memory; the 9B is better and wants 16 GB.
+LOCAL_AI_MODEL_LIST = {
+    "Qwen3.5-4B-Q4_K_M.gguf": {"label": "Qwen 3.5 4B", "size": 2740937888,
+                               "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"},
+    "Qwen3.5-9B-Q4_K_M.gguf": {"label": "Qwen 3.5 9B", "size": 5680522464,
+                               "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"},
+}
+if os.environ.get("RAPREAPER_LOCAL_AI_MODEL_LIST"):          # (the tests: a stand-in model of a few bytes)
+    with open(os.environ["RAPREAPER_LOCAL_AI_MODEL_LIST"], "r", encoding="utf-8") as _f:
+        LOCAL_AI_MODEL_LIST = json.load(_f)
+LOCAL_AI_PORTS = tuple(range(8077, 8087))
+LOCAL_AI_CONTEXT = 32768               # tokens the model keeps in mind (Qwen 3.5's few full-attention layers keep this small)
+LOCAL_AI_STATE = os.path.join(KIT, "state", "local_ai")
+LOCAL_AI_SYSTEM = (
+    "You are RapReaper's Local AI: a mix engineer and a patient teacher for a beginner who records rap vocals at home in "
+    "REAPER. You change their project only through the RapReaper tools, whose names start with rapreaper_ (the playbook "
+    "names them without that start: 'status' is rapreaper_status). At the start of every conversation call "
+    "rapreaper_status, then rapreaper_playbook, and follow the playbook. Say a change was made only when a tool result "
+    "shows it. Before anything that cuts, removes, mutes or saves, show the plan and wait for the person's yes. "
+    "Answer briefly, in plain words, with the numbers the tools give.")
+
+
+def local_ai_platform():
+    """Which llama.cpp build this computer takes: windows, mac-arm64, mac-x64, or '' (none offered)."""
+    if PF.IS_WINDOWS:
+        return "windows"
+    if PF.IS_MAC:
+        return "mac-arm64" if mac_chip() == "arm64" else "mac-x64"
+    return ""
+
+
+def local_ai_server():
+    return os.path.join(LOCAL_AI_RUNTIME, "llama-server.exe" if PF.IS_WINDOWS else "llama-server")
+
+
+def _local_ai_choice():
+    try:
+        with open(os.path.join(LOCAL_AI_STATE, "model.txt"), "r", encoding="utf-8") as f:
+            name = f.read().strip()
+        return name if name in LOCAL_AI_MODEL_LIST else None
+    except OSError:
+        return None
+
+
+def local_ai_state():
+    """What of the Local AI is here (a quick look; Start Local AI checks every file): runtime, model, label, ready."""
+    present = [n for n in LOCAL_AI_MODEL_LIST if os.path.isfile(os.path.join(LOCAL_AI_MODELS, n))]
+    chosen = _local_ai_choice()
+    model = chosen if chosen in present else (max(present, key=lambda n: LOCAL_AI_MODEL_LIST[n]["size"]) if present else None)
+    runtime = os.path.isfile(local_ai_server())
+    return {"runtime": runtime, "model": model, "label": LOCAL_AI_MODEL_LIST[model]["label"] if model else None,
+            "ready": bool(runtime and model and local_ai_platform())}
+
+
+def _runtime_list():
+    # (RAPREAPER_LOCAL_AI_FILES names another list: the tests, whose stand-in llama-server is not llama.cpp's)
+    try:
+        with open(os.environ.get("RAPREAPER_LOCAL_AI_FILES") or LOCAL_AI_FILES, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+# the files Finder and Explorer leave in any folder the person opens: never loaded as a library, so not a reason to stop
+_OS_FOLDER_FILES = {".ds_store", "thumbs.db", "ehthumbs.db", "desktop.ini"}
+
+
+def local_ai_runtime_problems():
+    """Why the files in LocalAI/runtime are not exactly llama.cpp's pinned build for this system ([] when they are)."""
+    spec = _runtime_list().get(local_ai_platform())
+    if not isinstance(spec, dict) or not isinstance(spec.get("files"), dict):
+        return ["RapReaper's list of llama.cpp's files (%s) is missing or names no build for this system"
+                % os.path.basename(LOCAL_AI_FILES)]
+    files, links = spec["files"], spec.get("links") or {}
+    problems = []
+    for rel, digest in sorted(files.items()):
+        path = os.path.join(LOCAL_AI_RUNTIME, rel)
+        if os.path.islink(path) or not os.path.isfile(path):
+            problems.append("missing: %s" % rel)
+        elif sha256_of(path) != digest:
+            problems.append("not the file Get Local AI checked: %s" % rel)
+
+    def target_digest(name, depth=0):
+        if name in files:
+            return files[name]
+        return target_digest(links[name], depth + 1) if name in links and depth < 8 else None
+
+    for rel, target in sorted(links.items()):
+        path = os.path.join(LOCAL_AI_RUNTIME, rel)
+        if os.path.islink(path):
+            if os.readlink(path) != target:
+                problems.append("a link that points elsewhere: %s" % rel)
+        elif os.path.isfile(path):              # (unpacked as a copy instead of a link: the same content is fine)
+            if sha256_of(path) != target_digest(rel):
+                problems.append("not the file Get Local AI checked: %s" % rel)
+        else:
+            problems.append("missing: %s" % rel)
+    known = set(files) | set(links)
+    for base, dirs, names in os.walk(LOCAL_AI_RUNTIME):
+        for n in names + [d for d in dirs if os.path.islink(os.path.join(base, d))]:
+            rel = os.path.relpath(os.path.join(base, n), LOCAL_AI_RUNTIME).replace(os.sep, "/")
+            path = os.path.join(base, n)
+            harmless = n == ".keep" or (n.casefold() in _OS_FOLDER_FILES and os.path.isfile(path) and not os.path.islink(path))
+            if rel not in known and not harmless:
+                problems.append("not part of llama.cpp %s, so it must not lie there: %s" % (LOCAL_AI_BUILD, rel))
+    return problems
+
+
+def _local_ai_model_ok(name):
+    """The model file has its published size and checksum (the checksum is remembered per size and date, so a 3 to 6 GB
+    file is read once, not at every start)."""
+    want = LOCAL_AI_MODEL_LIST[name]
+    path = os.path.join(LOCAL_AI_MODELS, name)
+    try:
+        st = os.stat(path)
+    except OSError:
+        return False
+    if st.st_size != want["size"]:
+        return False
+    seen_file = os.path.join(LOCAL_AI_STATE, "checked.json")
+    try:
+        with open(seen_file, "r", encoding="utf-8") as f:
+            seen = json.load(f)
+    except (OSError, ValueError):
+        seen = {}
+    key = "%s|%d|%d" % (name, st.st_size, int(st.st_mtime))
+    if isinstance(seen, dict) and seen.get(key) == want["sha256"]:
+        return True
+    if sha256_of(path) != want["sha256"]:
+        return False
+    try:
+        os.makedirs(LOCAL_AI_STATE, exist_ok=True)
+        write_atomic(seen_file, json.dumps({key: want["sha256"]}, indent=1) + "\n")
+    except (OSError, ValueError):
+        pass
+    return True
+
+
+def local_ai_check(model=None):
+    """After Get Local AI (--local-ai-check [MODEL]): every runtime file and the model checked, the model remembered."""
+    say("RapReaper %s: checking the Local AI" % VERSION)
+    problems = local_ai_runtime_problems()
+    if problems:
+        say("llama.cpp's files in LocalAI%sruntime are not the ones expected (%d problem(s)), for example:" % (os.sep, len(problems)))
+        for p in problems[:8]:
+            say("  - " + p)
+        return 1
+    name = model if model in LOCAL_AI_MODEL_LIST else local_ai_state()["model"]
+    if not name:
+        say("No AI model is in LocalAI%smodels yet." % os.sep)
+        return 1
+    if not _local_ai_model_ok(name):
+        say("%s is not the published file (size or checksum differs): delete it and run Get Local AI again." % name)
+        return 1
+    os.makedirs(LOCAL_AI_STATE, exist_ok=True)
+    write_atomic(os.path.join(LOCAL_AI_STATE, "model.txt"), name + "\n")
+    say("OK: llama.cpp %s and %s are in place, every file checked." % (LOCAL_AI_BUILD, LOCAL_AI_MODEL_LIST[name]["label"]))
+    say("Next: double-click %s. It opens RapReaper's Local AI in your browser (on this computer only)." % PF.launcher("Start Local AI"))
+    return 0
+
+
+def _local_ai_files_written(name, python):
+    """The MCP settings and chat-window defaults Start Local AI gives llama-server (in kit/state/local_ai)."""
+    os.makedirs(LOCAL_AI_STATE, exist_ok=True)
+    mcp = os.path.join(LOCAL_AI_STATE, "mcp.json")
+    ui = os.path.join(LOCAL_AI_STATE, "ui.json")
+    entry = {"command": python, "args": [SERVER],
+             "env": {"RAPREAPER_HOME": KIT, "RAPREAPER_TOOLS": "core", "RAPREAPER_AI_APP": "local"},
+             "timeout_ms": 120000}
+    write_atomic(mcp, json.dumps({"mcpServers": {"rapreaper": entry}}, indent=2) + "\n")
+    write_atomic(ui, json.dumps({"systemMessage": LOCAL_AI_SYSTEM}, indent=2) + "\n")
+    return mcp, ui
+
+
+_LISTENING = re.compile(r"listening on (http://[0-9.]+:[0-9]+)")
+# llama.cpp asks each MCP server for its tools once while it starts, and gives up on one after 10 seconds
+_MCP_WARMUP_FAILED = re.compile(r"MCP warmup: (?:failed to spawn 'rapreaper'|'rapreaper' discovered 0 tools)")
+
+
+def _local_ai_tools_answer(mcp_path, seconds=60):
+    """Start RapReaper's tool server exactly as mcp.json tells llama.cpp to, and ask for its tools the way llama.cpp's
+    start-up does. (number of tools listed, seconds until the list came, the server's own messages)."""
+    with open(mcp_path, "r", encoding="utf-8") as f:
+        entry = json.load(f)["mcpServers"]["rapreaper"]
+    env = dict(os.environ)
+    env.update(entry.get("env") or {})
+    t0 = time.time()
+    try:
+        p = subprocess.Popen([entry["command"]] + list(entry.get("args") or []), stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, cwd=LOCAL_AI_RUNTIME)
+    except OSError as e:
+        return 0, 0.0, str(e)
+    found, errors = {}, []
+
+    def read_replies():
+        for line in iter(p.stdout.readline, b""):
+            try:
+                m = json.loads(line.decode("utf-8", "replace"))
+            except ValueError:
+                continue
+            if isinstance(m, dict) and m.get("id") == 2:
+                found["tools"] = len(((m.get("result") or {}).get("tools")) or [])
+                found["seconds"] = time.time() - t0
+                return
+
+    reader = threading.Thread(target=read_replies, daemon=True)
+    reader.start()
+    threading.Thread(target=lambda: errors.extend(iter(p.stderr.readline, b"")), daemon=True).start()
+    hello = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "llama.cpp", "version": "1.0"}}}
+    try:
+        for m in (hello, {"jsonrpc": "2.0", "method": "notifications/initialized"},
+                  {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}):
+            p.stdin.write((json.dumps(m) + "\n").encode("utf-8"))
+        p.stdin.flush()
+    except OSError:
+        pass
+    reader.join(seconds)
+    try:
+        p.stdin.close()
+    except OSError:
+        pass
+    try:
+        p.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        p.kill()
+    return found.get("tools", 0), found.get("seconds", time.time() - t0), b"".join(errors).decode("utf-8", "replace")
+
+
+def run_local_ai(think=False, cpu=False, no_browser=False):
+    """Start Local AI (--local-ai): llama-server with the checked model and RapReaper's tools, and its chat window."""
+    say("RapReaper %s: Local AI (llama.cpp %s, on this computer only)" % (VERSION, LOCAL_AI_BUILD))
+    if not local_ai_platform():
+        say("The Local AI is offered for Windows and macOS. On this system, run llama-server yourself with RapReaper's "
+            "settings from kit/state/ai_app_settings.txt.")
+        return 1
+    st = local_ai_state()
+    if not st["runtime"] or not st["model"]:
+        say("The Local AI is not downloaded yet: double-click %s first (once)." % PF.launcher("Get Local AI"))
+        return 1
+    if not _probe_packages(server_python())[0]:
+        say("Run %s first: RapReaper's tools need the Python packages it installs." % PF.launcher("Install RapReaper"))
+        return 1
+    problems = local_ai_runtime_problems()
+    if problems:
+        say("llama.cpp was NOT started: the files in LocalAI%sruntime are not the ones Get Local AI checked:" % os.sep)
+        for p in problems[:8]:
+            say("  - " + p)
+        say("Double-click %s again; it fetches and checks them afresh." % PF.launcher("Get Local AI"))
+        return 1
+    say("Checking the AI model (%s; the first time this reads the whole file, half a minute or so) ..." % st["label"])
+    if not _local_ai_model_ok(st["model"]):
+        say("%s is not the published file (size or checksum differs). Delete it from LocalAI%smodels and double-click %s again."
+            % (st["model"], os.sep, PF.launcher("Get Local AI")))
+        return 1
+    mcp, ui = _local_ai_files_written(st["model"], server_python())
+    say("Checking that RapReaper's tools answer the way llama.cpp asks for them ...")
+    n_tools, seconds, messages = _local_ai_tools_answer(mcp)
+    if n_tools and seconds > 5:                        # (a slow first start: once more, now that its files have been read)
+        n_tools, seconds, messages = _local_ai_tools_answer(mcp)
+    if not n_tools:
+        say("llama.cpp was NOT started: RapReaper's tool server did not list its tools. Its last messages:")
+        for line in (_scrub(messages).strip().splitlines() or ["(none)"])[-6:]:
+            say("  " + line)
+        say("Run %s once more (it is safe), then start the Local AI again." % PF.launcher("Install RapReaper"))
+        return 1
+    if seconds > 8:
+        say("Note: RapReaper's tools took %.0f seconds to answer, and llama.cpp waits only 10. Should the chat window show no "
+            "RapReaper tools, close this window and start the Local AI again." % seconds)
+    log_path = os.path.join(LOCAL_AI_STATE, "llama-server.log")
+    base = [local_ai_server(), "-m", os.path.join(LOCAL_AI_MODELS, st["model"]), "--mcp-servers-config", mcp,
+            "--ui-config-file", ui, "--host", "127.0.0.1", "-c", str(LOCAL_AI_CONTEXT), "-np", "1", "--jinja",
+            "--reasoning", "on" if think else "off", "--alias", "RapReaper Local AI (%s)" % st["label"]]
+    tries = [cpu] if cpu else [False, True]            # (a graphics driver that fails: once more, processor only)
+    tools_retry = True                                 # (llama.cpp got no tools from RapReaper in time: once more)
+    for use_cpu in tries:
+        i = 0
+        while i < len(LOCAL_AI_PORTS):
+            args = base + ["--port", str(LOCAL_AI_PORTS[i])] + (["--device", "none"] if use_cpu else [])
+            outcome = _run_llama_server(args, log_path, no_browser, use_cpu)
+            if outcome == "port":
+                i += 1
+                continue
+            if outcome == "tools":
+                if tools_retry:
+                    tools_retry = False
+                    say("llama.cpp did not get RapReaper's tools while starting (it waits 10 seconds); starting it once more ...")
+                    continue
+                say("llama.cpp again did not get RapReaper's tools, so it was stopped: a chat without them could not change "
+                    "anything. Close other programs (a virus scan, say), then start the Local AI again; "
+                    "kit%sstate%slocal_ai%sllama-server.log has llama.cpp's messages." % (os.sep, os.sep, os.sep))
+                return 1
+            if outcome == "gpu" and not use_cpu and len(tries) > 1:
+                say("llama.cpp stopped while starting on the graphics processor; trying once more on the processor only ...")
+                break
+            return 0 if outcome in ("done", "stopped") else 1
+        else:
+            say("No free port between %d and %d on this computer; close the other program using them and try again."
+                % (LOCAL_AI_PORTS[0], LOCAL_AI_PORTS[-1]))
+            return 1
+    return 1
+
+
+def _run_llama_server(args, log_path, no_browser, use_cpu):
+    """Run llama-server until it stops. 'port' (that port was taken), 'gpu' (stopped while starting), 'tools' (it got
+    none of RapReaper's tools while starting, so it was stopped), 'done', 'stopped' (the person pressed Ctrl+C) or
+    'failed'. Its full output goes to kit/state/local_ai/llama-server.log."""
+    import webbrowser
+    try:
+        log = open(log_path, "w", encoding="utf-8", errors="replace")
+    except OSError:
+        log = None
+    try:
+        proc = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                cwd=LOCAL_AI_RUNTIME, text=True, encoding="utf-8", errors="replace", bufsize=1)
+    except OSError as e:
+        say("llama.cpp could not be started: %s" % e)
+        return "failed"
+    url, tail = None, []
+    try:
+        for line in proc.stdout:
+            if log:
+                log.write(line)
+            tail = (tail + [line.rstrip()])[-12:]
+            low = line.lower()
+            if url is None and _MCP_WARMUP_FAILED.search(line):
+                say("  llama.cpp: " + line.rstrip())
+                proc.terminate()
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                return "tools"
+            if url is None:
+                m = _LISTENING.search(line)
+                if m:
+                    url = m.group(1).replace("0.0.0.0", "127.0.0.1")
+                    say("")
+                    say("RapReaper's Local AI is running at %s (only this computer can reach it)%s." % (
+                        url, ", on the processor only" if use_cpu else ""))
+                    say("  - Your browser opens its chat window. The first answer can take a minute while the model loads.")
+                    say("  - It asks before every RapReaper tool runs: choose Allow (or Always allow for that tool).")
+                    say("  - Start REAPER with your project, then type in the chat:  Run the RapReaper self-test")
+                    say("  - Keep this window open while you use it; close it (or press Ctrl+C) to stop the Local AI.")
+                    if not no_browser:
+                        try:
+                            webbrowser.open(url)
+                        except Exception:
+                            say("  (Open %s in your browser yourself.)" % url)
+            if ("error" in low or "failed" in low or "warn" in low and "mcp" in low) and len(line) < 400:
+                say("  llama.cpp: " + line.rstrip())
+        code = proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        try:
+            proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        say("The Local AI has stopped.")
+        return "stopped"
+    finally:
+        if log:
+            log.close()
+    if url is None:
+        text = " ".join(tail).lower()
+        if "bind" in text or "address already in use" in text or "port" in text and "in use" in text:
+            return "port"
+        say("llama.cpp stopped before it was ready (exit code %s). The last lines of kit%sstate%slocal_ai%sllama-server.log:"
+            % (code, os.sep, os.sep, os.sep))
+        for t in tail[-6:]:
+            say("  " + t)
+        return "gpu" if not use_cpu else "failed"
+    say("The Local AI has stopped (exit code %s)." % code)
+    return "done" if code == 0 else "failed"
 
 
 # --------------------------------------------------------------------------------------------
@@ -1187,7 +1892,7 @@ def _scrub(value):
 
 
 def self_check():
-    step(6, "Starting the RapReaper tool server once, the way Claude will")
+    step(6, "Starting the RapReaper tool server once, the way an AI app will")
     env = dict(os.environ)
     env["RAPREAPER_HOME"] = KIT
     try:
@@ -1217,7 +1922,7 @@ def self_check():
         threading.Thread(target=fn, daemon=True).start()
 
     def ask(msg, seconds):
-        """Send one message; for a request, wait for its reply (the way Claude does)."""
+        """Send one message; for a request, wait for its reply (the way an AI app does)."""
         try:
             p.stdin.write((json.dumps(msg) + "\n").encode("utf-8"))
             p.stdin.flush()
@@ -1285,8 +1990,8 @@ def self_check():
     privacy = str(status.get("privacy") or "")
     if privacy:
         ok("privacy: %s" % privacy.split(". The privacy tool")[0])
-        info("Everything RapReaper sends to Claude is recorded, as sent, in kit\\logs\\sent_to_claude.log on this PC; which label "
-             "stands for which file is in kit\\state\\private_names.txt. Ask Claude \"show RapReaper's privacy settings\" to see or "
+        info("Everything RapReaper sends to the AI app is recorded, as sent, in kit\\logs\\sent_to_ai.log on this PC; which label "
+             "stands for which file is in kit\\state\\private_names.txt. Ask your AI app \"show RapReaper's privacy settings\" to see or "
              "change the level (standard / strict / maximum).")
     if status.get("reaper") == "connected":
         ok("REAPER is open and connected right now")
@@ -1985,6 +2690,7 @@ def release_launchers():
 KEEP_ON_UPDATE = ("kit/state", "kit/chains/user", "kit/references", "kit/exports", "kit/captures", "kit/models", "kit/logs",
                   "kit/imports",
                   "kit/venv", "tools", "updates", "VocalRemover/models", "VocalRemover/Output", "VocalRemover/settings.json",
+                  "LocalAI/runtime", "LocalAI/models",
                   "kit/reaper-daemon/bridge/bridge_config.json", "kit/reaper-daemon/bridge/heartbeat.json",
                   "kit/reaper-daemon/inbox", "kit/reaper-daemon/outbox", "kit/reaper-daemon/processing",
                   "kit/reaper-daemon/archive", "kit/reaper-daemon/failed", "kit/reaper-daemon/logs")
@@ -2553,7 +3259,7 @@ def _apply_update(zf, top, manifest, man_text, old_manifest, new_version):
                 pass
     if blocked:
         todo("The update was not started, because %d file(s) in this folder cannot be replaced: %s. Nothing was changed. "
-             "Close REAPER, Claude and the Vocal Remover (a program that is open can keep its files locked), clear "
+             "Close REAPER, your AI app and the Vocal Remover (a program that is open can keep its files locked), clear "
              "'read-only' on the RapReaper folder if it is set, and run the update again."
              % (len(blocked), "; ".join(blocked[:5])))
         return None
@@ -2667,12 +3373,12 @@ def _apply_update(zf, top, manifest, man_text, old_manifest, new_version):
         clean_staged()
         if not not_back:
             todo("The update stopped while replacing %s (%s). It undid what it had done so far (%d file(s) put back from "
-                 "the copies, %d new file(s) removed), so this folder is RapReaper %s as before. Close REAPER, Claude and "
+                 "the copies, %d new file(s) removed), so this folder is RapReaper %s as before. Close REAPER, your AI app and "
                  "the Vocal Remover (a program that is open can keep its files locked) and run the update again."
                  % (failed_rel, e, sum(1 for d in done if d["existed"]), sum(1 for d in done if not d["existed"]), VERSION))
         else:
             todo("The update stopped while replacing %s (%s), and %d file(s) could not be put back: %s. The old versions of "
-                 "the replaced files are in %s; copy them back into the same places in this folder, or close REAPER, Claude "
+                 "the replaced files are in %s; copy them back into the same places in this folder, or close REAPER, your AI app "
                  "and the Vocal Remover and run the update again (it puts everything in place)."
                  % (failed_rel, e, len(not_back), ", ".join(not_back[:6]), backup_dir))
         if not isinstance(e, OSError):
@@ -2964,7 +3670,7 @@ def allow_program(kind, path):
     else:
         say("vocal_clarity (with words true) can now write down the words of a vocal with it, on this PC. Put a whisper.cpp")
         say("model file (ggml-base.en.bin or ggml-small.en.bin) in kit\\models. The words stay in kit\\state\\transcripts;")
-        say("Claude is told which words are unclear and when, not the words themselves, unless you ask.")
+        say("The AI is told which words are unclear and when, not the words themselves, unless you ask.")
     return 0
 
 
@@ -2973,7 +3679,7 @@ def allow_program(kind, path):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Install, check or remove RapReaper.")
     ap.add_argument("--check", action="store_true", help="change nothing; just report")
-    ap.add_argument("--uninstall", action="store_true", help="remove RapReaper from REAPER's startup and from Claude")
+    ap.add_argument("--uninstall", action="store_true", help="remove RapReaper from REAPER's startup and from the AI apps")
     ap.add_argument("--no-pip", action="store_true", help="do not install Python packages")
     ap.add_argument("--reaper-resource-dir", default=None, help="REAPER's settings folder (portable installs)")
     ap.add_argument("--allow-vocal-remover", default=None, metavar="PATH",
@@ -2991,10 +3697,25 @@ def main(argv=None):
                     help="build the Vocal Remover's model from the files 'Get Vocal Remover Model' downloaded")
     ap.add_argument("--gpu", default=None, metavar="on|off", help="use the graphics processor for vocal separation")
     ap.add_argument("--privacy", default=None, metavar="LEVEL", help="the privacy level: standard, strict or maximum")
-    ap.add_argument("--activity-log", default=None, metavar="on|off", help="the record of everything sent to Claude (kit/logs)")
+    ap.add_argument("--activity-log", default=None, metavar="on|off", help="the record of everything sent to the AI app (kit/logs)")
     ap.add_argument("--expire-days", default=None, type=int, metavar="N", help="remove measurements and logs older than N days (0 = never)")
     ap.add_argument("--no-gpu-test", action="store_true", help="do not offer the Vocal Remover's graphics test at the end")
+    ap.add_argument("--ai-apps", default=None, metavar="LIST",
+                    help="which AI apps to connect: all (default), none, or a list such as claude,chatgpt (remembered)")
+    ap.add_argument("--local-ai", action="store_true", help="start RapReaper's Local AI (llama.cpp on this computer)")
+    ap.add_argument("--local-ai-check", nargs="?", const="", default=None, metavar="MODEL",
+                    help="check the Local AI's files after Get Local AI")
+    ap.add_argument("--think", action="store_true", help="with --local-ai: let the model reason before it answers (slower)")
+    ap.add_argument("--cpu", action="store_true", help="with --local-ai: run on the processor only")
+    ap.add_argument("--no-browser", action="store_true", help="with --local-ai: do not open the browser")
     args = ap.parse_args(argv)
+
+    if args.local_ai:
+        return run_local_ai(think=args.think, cpu=args.cpu, no_browser=args.no_browser)
+    if args.local_ai_check is not None:
+        return local_ai_check(args.local_ai_check or None)
+    if args.ai_apps is not None:
+        return set_ai_apps(args.ai_apps)
 
     if args.allow_vocal_remover is not None:
         return allow_vocal_remover(args.allow_vocal_remover)
@@ -3019,7 +3740,7 @@ def main(argv=None):
         say()
         remove_reaper(args.reaper_resource_dir)
         reaper_done = not problems
-        remove_claude()
+        remove_ai_apps()
         say()
         if problems:
             say("NOT FINISHED YET. %d thing(s) could not be removed:" % len(problems))
@@ -3032,7 +3753,7 @@ def main(argv=None):
             return 1
         if reaper_done:
             forget_reaper_dir()
-        say("RapReaper is disconnected. Restart REAPER and Claude. You can now delete this folder if you want;")
+        say("RapReaper is disconnected. Restart REAPER and your AI apps. You can now delete this folder if you want;")
         say("your saved chains are in  kit\\chains\\user  and your mix log is in  kit\\state  (copy them first to keep them).")
         say("kit\\exports holds the songs you exported and kit\\captures the short measurement recordings (and any")
         say("separated vocals of songs you had RapReaper learn): delete the folder if you want them gone.")
@@ -3042,7 +3763,7 @@ def main(argv=None):
         say("  - RapReaper's one small effect, Effects\\RapReaper\\ducks.jsfx in REAPER's settings folder: projects that have")
         say("    ducks drawn on it keep playing them (delete the file if you like; those projects then show it as missing)")
         say("  - the copies this installer kept, named  *.rapreaper-backup-*  , next to REAPER's __startup.lua,")
-        say("    reaper.ini and Claude's settings file (delete them if you like)")
+        say("    reaper.ini and the AI apps' settings files (delete them if you like)")
         was = _install_notes().get("offline_preference_was")
         if was:
             say("  - REAPER's preference 'Set media items offline when application is not active' stays OFF (the installer")
@@ -3063,7 +3784,7 @@ def main(argv=None):
     check_lameenc(not args.no_pip, args.check)
     check_onnx(not args.no_pip, args.check)
     setup_reaper(args.reaper_resource_dir, args.check)
-    setup_claude(args.check)
+    setup_ai_apps(args.check)
     if not any("NumPy" in p for p in problems):
         self_check()
     else:
@@ -3096,10 +3817,25 @@ def finish():
     say("ALL SET.")
     say()
     say("Next:")
-    say("  1. Quit Claude completely (right-click its icon near the clock > Quit) and open it again.")
+    apps = list(AI_APPS_CONNECTED)
+    others = [a for a in apps if a != "Claude"]
+    if "Claude" in apps:
+        say("  1. Quit Claude completely (right-click its icon near the clock > Quit) and open it again%s." % (
+            (" (and %s)" % ", ".join(others)) if others else ""))
+    elif others:
+        say("  1. Quit %s completely and open %s again (a terminal app: start a new session)." % (
+            ", ".join(others), "them" if len(others) > 1 else "it"))
+    else:
+        say("  1. Open your AI app (the one you added RapReaper to by hand).")
+    if local_ai_state()["ready"]:
+        say("     %s RapReaper's Local AI: double-click %s (on this computer, nothing leaves it)." % (
+            "Or use" if apps else "Or:", PF.launcher("Start Local AI")))
+    elif not apps:
+        say("     Or get RapReaper's free Local AI: double-click %s once, then %s." % (
+            PF.launcher("Get Local AI"), PF.launcher("Start Local AI")))
     say("  2. Start REAPER and open (or create) a project. Wait until its window is fully up.")
-    say("  3. In Claude, type:   Run the RapReaper self-test")
-    say("     Claude will ask permission to use the RapReaper tools the first time; choose 'Always allow'.")
+    say("  3. In your AI app, type:   Run the RapReaper self-test")
+    say("     It asks permission to use the RapReaper tools the first time; choose 'Always allow' (or Allow each time).")
     say()
     return 0
 

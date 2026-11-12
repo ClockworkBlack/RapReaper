@@ -1,20 +1,23 @@
-RapReaper 1.4.7 - mix rap vocals in REAPER by talking to Claude (Mac)
+RapReaper 1.5.0 - mix rap vocals in REAPER by talking to an AI (Mac)
 ===================================================================
 
 What this folder is
 -------------------
-RapReaper connects the Claude desktop app to REAPER on this computer. You type what you
-want ("clean up my lead vocal", "a bit brighter", "make it loud enough for Spotify",
-"line the new beat up with the old one", "what key is this beat in"); Claude sets REAPER's
-own plug-ins in real units, measures the audio before and after, and tells you what
-changed. RapReaper and your audio stay on this computer. (Claude itself is an online
-service: the text of the chat goes to Anthropic, your audio does not.)
+RapReaper connects an AI app to REAPER on this computer: any app that speaks MCP (Claude,
+ChatGPT's desktop app, Cursor, VS Code, LM Studio, Gemini CLI ...), or RapReaper's own Local
+AI, which runs on this computer. You type what you want ("clean up my lead vocal", "a bit
+brighter", "make it loud enough for Spotify", "line the new beat up with the old one", "what
+key is this beat in"); the AI sets REAPER's own plug-ins in real units, measures the audio
+before and after, and tells you what changed. RapReaper and your audio stay on this
+computer. (An online AI app is an online service: the text of the chat goes to the company
+that runs its model, Anthropic for Claude, OpenAI for ChatGPT; your audio does not. With the
+Local AI, nothing leaves this computer.)
 
 Any audio interface or microphone works: Focusrite, PreSonus, Universal Audio, MOTU,
 Audient, Behringer, Steinberg, a USB microphone, or none at all. RapReaper works on what
 REAPER has recorded, never on the interface itself. Setting up your microphone and
 interface in REAPER, step by step for any brand, is in "AUDIO INTERFACE SETUP.txt" in
-this folder. The full guide is "RapReaper Guide (Mac).pdf" in this folder; how Claude
+this folder. The full guide is "RapReaper Guide (Mac).pdf" in this folder; how the AI
 works with you is in kit/PLAYBOOK.md. There is a Windows version of RapReaper too (its
 own zip, with the same tools).
 
@@ -38,7 +41,10 @@ Before you install RapReaper (all free to install)
                        (3.12 or newer) and click through it with the standard choices. The
                        Python that comes with macOS's developer tools is too old and is not
                        used. Homebrew's Python (brew install python) works too.
-  4. Claude Desktop    https://claude.com/download             (sign in once)
+  4. An AI app        any app that speaks MCP, started once: Claude Desktop
+                       (https://claude.com/download), ChatGPT's desktop app, LM Studio,
+                       Cursor, VS Code, Windsurf, Gemini CLI ... Or none: RapReaper's own Local
+                       AI (Get Local AI.command, after the install) runs on this Mac, for free.
   5. Your audio interface or USB microphone, plugged in. On a Mac almost all of them need
      no driver (they are "class compliant"); the maker's app (Focusrite Control, Universal
      Control ...) is optional. Step by step for any brand: "AUDIO INTERFACE SETUP.txt".
@@ -58,9 +64,10 @@ Install
      and double-click it again. (Or: open Terminal, type  bash  and a space, drag the file
      into the window, press Return.) After this first run, every RapReaper .command file
      opens by double-click.
-  3. Quit Claude completely (Claude menu > Quit Claude, or Cmd+Q), open it again.
+  3. Quit your AI app completely (its menu > Quit, or Cmd+Q) and open it again. No AI app?
+     Double-click Get Local AI.command once, then Start Local AI.command.
   4. Start REAPER, open a project.
-  5. In Claude type:   Run the RapReaper self-test
+  5. In your AI app type:   Run the RapReaper self-test
      Run it again once your first recording is in a project: it then also checks, on your
      REAPER, that one track is measured on its own and that measurements follow the fader.
 
@@ -71,12 +78,13 @@ taking the voice out of a song); the Mac's own Python is left exactly as it is. 
 this folder it changes two files: REAPER's startup script (~/Library/Application
 Support/REAPER/Scripts/__startup.lua: two short marked blocks, one starts the bridge, one
 notes the time REAPER was started and starts RapReaper's own small helper for clip edits)
-and Claude's settings file (~/Library/Application Support/Claude/claude_desktop_config.json:
-one "rapreaper" entry). It keeps a dated copy of each file before changing it, and
+and the MCP settings of each AI app it finds (one "rapreaper" entry each: Claude's
+~/Library/Application Support/Claude/claude_desktop_config.json, ChatGPT's and Codex's
+~/.codex/config.toml, Cursor, VS Code, Windsurf, LM Studio, Gemini CLI). It keeps a dated copy of each file before changing it, and
 Uninstall RapReaper.command takes the changes out again. One more thing it may change, with
 REAPER closed: if REAPER's preference "Set media items offline when application is not
 active" is on, the installer switches it off in reaper.ini (copy kept), because with it on
-REAPER unloads the audio whenever Claude's window is in front and every measurement comes
+REAPER unloads the audio whenever your AI app's window is in front and every measurement comes
 back silent. With REAPER open, the self-test switches it off instead.
 
 Updating
@@ -87,6 +95,37 @@ Updating
   programs, puts the replaced files in updates/, and runs the new version's installer. Then
   quit REAPER and start it again (the helper inside REAPER only loads at start; status
   reminds you until you do). (Terminal asks once for permission to read Downloads: allow it.)
+
+What changed in 1.5.0, nightly (12 November 2026)
+-------------------------------------------------
+  A nightly build: RapReaper works with any AI app that speaks MCP, and comes with an AI of
+  its own that runs on this Mac.
+  - Any AI app. Before, the installer connected only Claude Desktop, and stopped with a
+    "TO DO" without it. It now adds RapReaper to every AI app it finds: Claude Desktop,
+    ChatGPT's desktop app and Codex (~/.codex/config.toml), Cursor, VS Code (GitHub Copilot),
+    Windsurf, LM Studio and Gemini CLI, keeping a copy of each settings file first. Any other
+    app that speaks MCP gets the three settings to add by hand in kit/state/ai_app_settings.txt.
+    "python3 rapreaper_install.py --ai-apps claude,chatgpt" (or none) chooses; Uninstall takes
+    it out of all.
+  - RapReaper's Local AI. Get Local AI.command downloads, once, llama.cpp's llama-server (MIT)
+    and an open AI model, Qwen 3.5 (Apache 2.0; 4B, 2.7 GB, or 9B, 5.7 GB, on an Apple-chip Mac
+    with 16 GB or more), each checked against its published checksum. Start Local AI.command
+    then opens a chat window in your browser with RapReaper connected: nothing you say leaves
+    this Mac, no account, no subscription. It asks before every tool runs. It is slower and less
+    careful than the big online models, and gets the 28 core tools (LocalAI/README.txt says
+    what to expect). On an Apple chip it runs on the chip's graphics part; on an Intel Mac the
+    first answer of a chat can take a few minutes.
+  - The tools no longer assume Claude: answers name the app you are using ("Quit Cursor
+    completely and open it again"), the privacy notes say who reads the chat (Anthropic for
+    Claude, OpenAI for ChatGPT, Google for Gemini, nobody for a model on this Mac), and the log
+    of what was sent is kit/logs/sent_to_ai.log (an older sent_to_claude.log is still counted
+    and cleared).
+  - The tool list suits every app: each option has one type, free-form options are marked as
+    such, and the 28 core tools come first (a few apps use only the first 40 tools). Setting
+    RAPREAPER_TOOLS=core in an app's settings gives a small model those 28 and a short playbook.
+  Details in kit/CHANGES-1.5.md. The helper inside REAPER is 1.5.0 (one version line); the
+  Vocal Remover is unchanged (2.0.3). RapReaper itself still has no network code: Get Local AI
+  is a separate script you start, like the other Get files.
 
 What changed in 1.4.7, nightly (9 November 2026)
 ------------------------------------------------
@@ -254,7 +293,12 @@ What is in here
   Make Full Packages.command   makes RapReaper-<version>-Mac-full.zip (and -Windows-full.zip) from the
                           zips and the model pieces in Downloads: one zip with the Vocal Remover's
                           model inside, to unzip and install on another computer
-  Uninstall RapReaper.command  disconnects RapReaper from REAPER and Claude
+  Uninstall RapReaper.command  disconnects RapReaper from REAPER and from the AI apps
+  Get Local AI.command    downloads RapReaper's Local AI once: llama.cpp and an open AI model (Qwen 3.5),
+                          each checked by checksum
+  Start Local AI.command  starts the Local AI and opens its chat window in your browser
+  LocalAI/                the Local AI: README.txt, licenses/, runtime-b12250.json (llama.cpp's files and
+                          their checksums); runtime/ and models/ fill when you run Get Local AI
   Get ffmpeg and Transcriber.command   installs ffmpeg and whisper.cpp with Homebrew and fetches the
                           speech model into kit/models (optional, one time), then offers the two Allow steps
   Allow ffmpeg.command        lets RapReaper start your ffmpeg (optional; only for MP3/M4A copies of exports)
@@ -269,7 +313,7 @@ What is in here
   SECURITY.txt            what was reviewed for security and privacy, what was found and fixed
   MANIFEST.sha256         the checksum of every shipped file (the updater checks a new zip with its own)
   DEVELOPMENT.md          for whoever changes RapReaper: how to test, build and update
-  kit/rapreaper_server.py    the tool server Claude starts (57 tools)
+  kit/rapreaper_server.py    the tool server your AI app starts (57 tools; 28 with RAPREAPER_TOOLS=core)
   kit/rapreaper_platform.py  what differs between Windows and macOS (folders, words), in one place
   kit/rapreaper_music.py     tempo, key and alignment of recordings; the reference cards
   kit/rapreaper_programs.py  the one door through which an allowed program (ffmpeg, whisper.cpp) is started
@@ -283,15 +327,17 @@ What is in here
                           saved clip layout, moves clips (into place, or to another track), reads
                           and sets sends, saves, opens and closes projects on request, and
                           reads/writes a plug-in's settings block (for ReaTune's key and scale)
-  kit/PLAYBOOK.md         the working method Claude follows
-  kit/CHANGES-1.4.md      every problem met so far and the change it got, 1.4.0 to 1.4.5
+  kit/PLAYBOOK.md         the working method the AI follows (PLAYBOOK-CORE.md: the short form for the
+                          core tools and small models)
+  kit/CHANGES-1.5.md      what 1.5.0 changed (any AI app, the Local AI)
+  kit/CHANGES-1.4.md      every problem met so far and the change it got, 1.4.0 to 1.4.7
   kit/CHANGES-1.3.md, kit/CHANGES-older.md   the same for the earlier versions
   kit/chains/             starter chains; your saved chains go in kit/chains/user
   kit/effects/            RapReaper's own small "Ducks" effect (RapReaper/ducks.jsfx); the installer
                           copies it into REAPER's Effects folder
   kit/references/         put finished songs you like here (WAV) to compare against
   kit/imports/            put a song exported from another program here (its tracks or its mix), in a folder
-                          named after the song, then ask Claude to remaster it
+                          named after the song, then ask the AI to remaster it
   kit/exports/            where "export the mix" puts your bounced songs
   kit/captures/           measurement recordings RapReaper makes and tidies up by itself (it keeps
                           the newest ones, at most about 1.5 GB; you may empty it any time
@@ -301,7 +347,7 @@ What is in here
                           install.json (the version installed), private_names.txt (which label stands
                           for which name), songs/ (saved song setups), edits/ (restore points for
                           clips) and transcripts/ (words written down by the transcriber, if you use one)
-  kit/logs/               sent_to_claude.log: every answer exactly as it was sent to Claude
+  kit/logs/               sent_to_ai.log: every answer exactly as it was sent to the AI app
   kit/reaper-daemon/      the bridge script that runs inside REAPER (third-party, MIT
                           licence, unmodified; see NOTICE.txt)
   updates/                the files an update replaced (made by Update RapReaper.command)
@@ -311,9 +357,9 @@ What is in here
 
 Safety in one paragraph
 -----------------------
-RapReaper opens no network port and contains no network code (the one optional helper,
-"Get ffmpeg and Transcriber.command", is a separate script you start yourself); Claude
-talks to it through the app, and it talks to REAPER through small text files inside this
+RapReaper opens no network port and contains no network code (the optional helpers,
+"Get ffmpeg and Transcriber.command" and "Get Local AI.command", are separate scripts you
+start yourself); the AI talks to it through the app, and it talks to REAPER through small text files inside this
 folder. It can add and set plug-ins, move faders, add tracks and sends, and render
 measurement files and your exported songs into this folder. It can split a clip and cut
 out, mute or turn down a piece of it when you ask for that (empty air, a breath, a harsh
@@ -328,21 +374,23 @@ your word. It starts no other program, with the exceptions you allow by name you
 (Cmd+Option+Z shows the list), and each answer says how to take that step back. When it
 has to switch a plug-in off or pull a fader down to measure, that change, the measurement
 and the change back are sent to REAPER as one command, so nothing is left changed even if
-Claude or this program is closed in the middle. Keep the folder in your own home folder:
+the AI app or this program is closed in the middle. Keep the folder in your own home folder:
 it is private to your account, and no program needs special permission to use it.
 
-What goes to Anthropic: the words you type and the text the tools answer (plug-in names,
+What leaves this Mac (to the company that runs your AI app's model: Anthropic for Claude,
+OpenAI for ChatGPT and Codex, Google for Gemini; nothing with the Local AI or another model on
+this Mac): the words you type and the text the tools answer (plug-in names,
 settings, measured numbers, track names, and the names of files and of the project only
 as the privacy level allows). Never audio. The answers never contain the folder paths on
 this Mac, your user name or the Mac's name (they say <RapReaper folder> and ~ instead);
 the same goes for RapReaper's log. The names of your music files (songs, beats, takes,
 stems, mixes, exports, the songs in the references and remaster folders) and of your saved
-projects are given as they are, so Claude can list what is in a folder and call songs by
+projects are given as they are, so the AI can list what is in a folder and call songs by
 name; never a folder, a path or any other kind of file: at the default level (strict) a
 file that is not music is a label whose meaning stays on this Mac (kit/state/private_names.txt),
-and at maximum, track names are labels too. kit/logs/sent_to_claude.log shows you exactly
+and at maximum, track names are labels too. kit/logs/sent_to_ai.log shows you exactly
 what left this Mac, answer by answer. Name tracks plainly and leave personal details out of the chat: what you type goes
-to Anthropic regardless of the level. For troubleshooting only, RAPREAPER_PRIVACY=off shows
+to your AI app's company regardless of the level. For troubleshooting only, RAPREAPER_PRIVACY=off shows
 the real paths again; 'status' always says which level is in force.
 
 Programs. What RapReaper will not run or load: it never starts a program it merely found on
@@ -356,6 +404,6 @@ folders, and never goes online. The Kim Vocal 2 model file is checked against it
 checksum before it is loaded. The bridge script and RapReaper's own helper script are checked
 against their checksums at every start; a changed file is reported and not used. A RapReaper
 zip is installed by the updater only when every file in it matches the zip's own manifest.
-Names from your project (tracks, files, notes) are data to Claude, never instructions;
+Names from your project (tracks, files, notes) are data to the AI, never instructions;
 anything that removes or silences part of a recording, or opens or closes a project, happens
 only after you said yes to that step.

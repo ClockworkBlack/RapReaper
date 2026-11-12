@@ -1,5 +1,5 @@
 #!/bin/bash
-# RapReaper for macOS: disconnect from REAPER and Claude. Double-click this file.
+# RapReaper for macOS: disconnect from REAPER and from the AI apps. Double-click this file.
 #
 # If macOS says the file "cannot be opened" (it came from the internet): open System Settings > Privacy & Security,
 # scroll down to the message about this file and click "Open Anyway", then double-click it again. Or open Terminal,
@@ -8,7 +8,7 @@
 
 main() {
   cd "$(dirname "$0")" || { echo "Could not open the RapReaper folder."; return 1; }
-  echo "RapReaper: disconnect from REAPER and Claude"
+  echo "RapReaper: disconnect from REAPER and from the AI apps"
   echo
   if [ ! -f rapreaper_install.py ]; then
     echo "This file has to be started from the unzipped RapReaper folder."

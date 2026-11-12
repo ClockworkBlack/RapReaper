@@ -9,6 +9,7 @@ source/build/downloads/
 *.onnx.part*
 *.onnx.joining
 *.onnx.building
+*.gguf
 *.ckpt
 config_kimmel_unwa_ft.yaml
 
@@ -25,6 +26,8 @@ source/kit/chains/user/*
 source/kit/venv/
 source/VocalRemover/models/*
 source/VocalRemover/Output/*
+source/LocalAI/runtime/*
+source/LocalAI/models/*
 !source/kit/logs/.keep
 !source/kit/captures/.keep
 !source/kit/exports/.keep
@@ -34,6 +37,8 @@ source/VocalRemover/Output/*
 !source/kit/chains/user/.keep
 !source/VocalRemover/models/.keep
 !source/VocalRemover/Output/.keep
+!source/LocalAI/runtime/.keep
+!source/LocalAI/models/.keep
 source/VocalRemover/settings.json
 source/VocalRemover/VocalRemover
 source/VocalRemover/VocalRemover.exe

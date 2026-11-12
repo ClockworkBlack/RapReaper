@@ -5,7 +5,7 @@ echo RapReaper never starts a program it merely found on this PC. If you have wh
 echo (https://github.com/ggerganov/whisper.cpp, the command-line program whisper-cli.exe or main.exe)
 echo and want RapReaper to use it to write down the words of a vocal ON THIS PC, give its full
 echo path here. Also put a model file (ggml-base.en.bin or ggml-small.en.bin) in kit\models.
-echo The words never leave this PC unless you ask Claude to show them.
+echo The words never leave this PC unless you ask the AI to show them.
 echo (In File Explorer: right-click the program, "Copy as path", then paste it here.)
 echo.
 set "WPATH="

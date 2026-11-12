@@ -9,16 +9,17 @@ needs Windows, REAPER or Claude Desktop (a simulated REAPER stands in for them).
 
 | Path | What |
 |---|---|
-| `kit/rapreaper_server.py` | the tool server Claude Desktop starts (MCP over stdio); every tool is a `t_...` function registered in `TOOLS` |
+| `kit/rapreaper_server.py` | the tool server an AI app starts (MCP over stdio; any app that speaks MCP: Claude Desktop, ChatGPT's desktop app and Codex, Cursor, VS Code, LM Studio, the Local AI's llama-server ...); every tool is a `t_...` function registered in `TOOLS`; `CORE_TOOLS` are listed first, and alone with `RAPREAPER_TOOLS=core` |
 | `kit/rapreaper_helper.lua` | RapReaper's own script inside REAPER (clip edits, project open/close/save, moving and importing clips, plug-in settings blocks); talks to the server through `kit/state/helper/inbox` and `outbox` |
 | `kit/reaper-daemon/` | the vendored bridge (Reaper Daemon, MIT, **unmodified**; its checksums are in the installer's `BRIDGE_SHA256` and in NOTICE.txt) |
 | `kit/rapreaper_audio.py` | measuring (loudness, noise, tone, sibilance, gaps, breaths, clarity ...) |
 | `kit/rapreaper_music.py` | tempo, key, note values, lining two recordings up (`align`), the reference cards, the DAW export notes, `wav_info` |
 | `kit/rapreaper_effects.py`, `kit/rapreaper_separate.py` | learning a song's vocal effects; vocal separation (the Vocal Remover program when it is allowed, else the same Roformer/MDX models through ONNX Runtime) |
 | `VocalRemover/` | the Vocal Remover 2.0: `source/` (Go, no cgo; `vendor/` holds purego, flac, oggvorbis), `licenses/`, `README.txt`, `Vocal Remover.command` (Mac launcher, checksums filled by the build). The binaries and the runtime libraries are not in the tree: `build/vr_runtime/` holds the ONNX Runtime / DirectML files the build packs, `build/out/` the compiled programs |
-| `kit/rapreaper_platform.py` | everything that differs between Windows and macOS: folders, Claude's settings place, the words answers use (`wording`), the home-folder placeholder. `RAPREAPER_PLATFORM=mac|windows|linux` overrides the detection (tests) |
+| `kit/rapreaper_platform.py` | everything that differs between Windows and macOS: folders, Claude's settings place, the AI apps' settings places (`ai_apps`), which AI app is connected (`set_ai_app`, from clientInfo) and how answers name it, the words answers use (`wording`), the home-folder placeholder. `RAPREAPER_PLATFORM=mac|windows|linux` overrides the detection (tests) |
 | `kit/rapreaper_programs.py` | the one door through which an allowed program (ffmpeg, whisper.cpp) is started |
-| `kit/PLAYBOOK.md` | the working method Claude reads at the start of a conversation (`playbook` tool) |
+| `kit/PLAYBOOK.md` | the working method the AI reads at the start of a conversation (`playbook` tool); `kit/PLAYBOOK-CORE.md` is its short form for the core tools (a small model), and must name no tool outside `CORE_TOOLS` (scenario `ai_apps` checks) |
+| `LocalAI/` | RapReaper's Local AI: `README.txt`, `licenses/`, `runtime-b12250.json` (every file of the pinned llama.cpp archives with its SHA-256; Start Local AI refuses anything else in `runtime/`); `runtime/` and `models/` are filled by Get Local AI (`get_local_ai.ps1` on Windows, `Get Local AI.command` on a Mac: the one other place that downloads) and kept by the updater. The launcher is `rapreaper_install.py --local-ai` (Start Local AI): it starts a program and a browser, no network code |
 | `rapreaper_install.py` | the installer (both systems): Python check, folder check, packages (a venv on a Mac), REAPER's start-up blocks and reaper.ini, Claude's settings, a self-check; `--update` (from a zip), `--allow-program`, `--allow-vocal-remover` |
 | `*.bat` / `*.command` | the double-click files (Windows / Mac). The `.command` files find a Python 3.12+ (never Apple's stub) and run the installer |
 | `mac/` | the Mac versions of README.txt and AUDIO INTERFACE SETUP.txt (the root ones are Windows) |
@@ -62,7 +63,7 @@ needs Windows, REAPER or Claude Desktop (a simulated REAPER stands in for them).
   (`_private`), then the activity log. New tools need nothing special, but file names in answers go through
   `name_out(name, "file")` (music files stay by name; other files become labels), track names through `name_out(_label(name), "track")`.
 - Anything that removes or silences audio, opens or closes a project, or moves clips: a plan first (no `apply`/`confirm`),
-  then the change, as one undo block, and the tool is listed in `DESTRUCTIVE_TOOLS` when the Claude app should ask first.
+  then the change, as one undo block, and the tool is listed in `DESTRUCTIVE_TOOLS` when the AI app should ask first.
 - The helper reads and writes only inside the kit folder (plus REAPER's own project save and the files `import_files` is
   given, which must lie in `kit/imports` or `kit/references`).
 - RapReaper starts the Vocal Remover only when `kit/state/settings.json` names it with its SHA-256 (the installer records the
@@ -101,7 +102,11 @@ RAPREAPER_E2E_DIR=/path/with/room python3 tests/e2e.py installer projects_fit re
   existing one) and the tool count in `scenario_protocol` and `scenario_mcp_sdk` goes up.
 - Test switches the server honours (environment): `RAPREAPER_PLATFORM`, `RAPREAPER_FREE_GB` (pretend free disk space),
   `RAPREAPER_PRIVACY` (`standard|strict|maximum|off`), `RAPREAPER_BUDGET_SECONDS`, `RAPREAPER_KEEP_CAPTURES`,
-  `RAPREAPER_PLUGIN_FORMATS`, `REAPER_RESOURCE_PATH`, `RAPREAPER_CLAUDE_CONFIG_DIRS`.
+  `RAPREAPER_PLUGIN_FORMATS`, `REAPER_RESOURCE_PATH`, `RAPREAPER_CLAUDE_CONFIG_DIRS`; since 1.5.0 `RAPREAPER_AI_HOME` (where the
+  installer looks for the AI apps' settings; e2e.py sets it to an empty stand-in for every scenario, so a test run never
+  touches the real apps), `RAPREAPER_TOOLS=core`, `RAPREAPER_AI_APP=local`, `RAPREAPER_LOCAL_AI_FILES` and
+  `RAPREAPER_LOCAL_AI_MODEL_LIST` (a stand-in llama-server and model for scenario `local_ai`). A new tool gets a place in
+  or out of `CORE_TOOLS`; the core count (28) is in scenario `ai_apps`.
 
 ## Building a release
 

@@ -1,4 +1,4 @@
-RapReaper 1.4.7
+RapReaper 1.5.0
 ============
 
 RapReaper's own files (rapreaper_install.py, kit/rapreaper_server.py, kit/rapreaper_audio.py, kit/rapreaper_music.py,
@@ -198,3 +198,19 @@ one for a sung line; lining two recordings up is plain normalized cross-correlat
 curves and then of their waveforms. The reference cards' loudness figures are those published by the
 streaming services (Spotify's loudness-normalization page and the others' published figures, October
 2026); everything else in the cards is common mixing practice written down, not taken from any one source.
+
+RapReaper's Local AI (LocalAI/, 1.5.0)
+--------------------------------------
+Not shipped in the zips: "Get Local AI" downloads these on the person's own computer from their authors, and
+checks each against the SHA-256 written in get_local_ai.ps1, Get Local AI.command and LocalAI/runtime-b12250.json.
+
+  llama.cpp, build b12250 (10 November 2026), by the ggml authors (https://github.com/ggml-org/llama.cpp), MIT
+  licence (LocalAI/licenses/llama.cpp - LICENSE.txt): the official release archives, unchanged:
+    llama-b12250-bin-win-vulkan-x64.zip    00ba40348fa2c5f60c605c00f67a670725e48781977c4a365de5c0ec8aa13845
+    llama-b12250-bin-macos-arm64.tar.gz    119dd527e2c2218b934a8900d96fb9874f3c90e659d0d80727737784b45ab9e9
+    llama-b12250-bin-macos-x64.tar.gz      7b12d26ec4b0505f56690db49ad34a0ddc42020e5c3d8ceb8f9585a83ce4b47b
+  The Windows archive also carries the LLVM OpenMP runtime (libomp.dll) under its own licence (LICENSE-LLVM-OpenMP
+  in the archive).
+
+  Qwen 3.5 (Qwen3.5-4B, Qwen3.5-9B), by the Qwen team, Alibaba Cloud, Apache 2.0 licence; the GGUF files made by
+  unsloth (https://huggingface.co/unsloth). Details: LocalAI/licenses/Qwen 3.5 - NOTICE.txt.

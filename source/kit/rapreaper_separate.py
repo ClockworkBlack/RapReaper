@@ -82,8 +82,8 @@ def vocal_remover_dir(home):
 def _candidates_dirs(home):
     """Where a model file may be: the Vocal Remover's models folder in the RapReaper folder, RapReaper's own models
     folder and, on Windows, the usual download places and other Vocal Remover folders. On a Mac only the two
-    folders inside RapReaper are looked at: reading Downloads, Desktop or Documents from a program Claude started
-    would make macOS ask the person for permission, in Claude's name."""
+    folders inside RapReaper are looked at: reading Downloads, Desktop or Documents from a program an AI app started
+    would make macOS ask the person for permission, in that app's name."""
     out = [os.path.join(vocal_remover_dir(home), "models"), os.path.join(home, "models")]
     if not PF.IS_WINDOWS:
         return [d for d in out if os.path.isdir(d)]
