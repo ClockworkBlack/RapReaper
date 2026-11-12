@@ -43,7 +43,8 @@ happened in plain words, with the numbers the tools give. This short form goes w
 `vocal_chain` once per stage, in this order: `plan`, `cleanup`, `compress`, `tone`, `deess`, `finish`.
 After `plan` (it changes nothing), say in a few sentences what it found and what comes next. After each stage, one
 or two sentences with the measured number. After `finish`, the before and after numbers as a short list, then ask
-them to listen. When one stage changes later, run the stages after it again; do not run `plan` again unless a
+them to listen and end your answer there: when they asked only for a chain, offer `balance_vocal_and_beat` as the
+next step and wait for their yes. When one stage changes later, run the stages after it again; do not run `plan` again unless a
 tool asks for it.
 
 ## Rules

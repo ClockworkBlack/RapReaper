@@ -93,16 +93,16 @@ On both systems, double-click **Get Vocal Remover Model** afterwards to get the 
 The result must match the file's line in `SHA256SUMS.txt`:
 
 ```
-7f0d84d9a40a828dbee3b838472306a5f58c2686e02028e712e6ef254b1d19f8  RapReaper-1.5.0-Mac-Intel.zip
-9d8b222e6eded7b8df3b283d6e89b6cf7a2ac1727fd2dd2714527cf615be4ac8  RapReaper-1.5.0-Mac.zip
-e2edf1b08cf12d6abe5900bb5460bfaeff2392848aa9bcf3575a12f11b08d4c3  RapReaper-1.5.0-Windows.zip
+2e4ad3549c98ecdf04298a759ac6736016cd5bafe467b149f400923da7b993db  RapReaper-1.5.0-Mac-Intel.zip
+39b6fbcb28aa6b03d3409ed1839a8da445fb431057d71b4e34e46c9309bcea3b  RapReaper-1.5.0-Mac.zip
+16cfe1de8b9de89e975e54f9ff19e9a920b5522f56eeebe94152e4c78bb040a3  RapReaper-1.5.0-Windows.zip
 ```
 
 ## How this build was tested
 
 What was run for 1.5.0 (nightly):
 
-- **The whole test suite passed:** all 150 measuring-code checks and all 1,279 end-to-end checks, in all 48 scenarios. Two scenarios are new: `ai_apps` and `local_ai` (46 checks). Every scenario that runs the installer was run again on the final files, after the last changes to the Local AI's launcher.
+- **The whole test suite passed:** all 150 measuring-code checks and all 1,280 end-to-end checks, in all 48 scenarios. Two scenarios are new: `ai_apps` and `local_ai` (46 checks). Every scenario that runs the installer was run again on the final files, after the last changes to the Local AI's launcher.
 - **Each AI app's handshake.** RapReaper's tool server was started the way each app starts it: Claude, ChatGPT and Codex, Cursor, VS Code, LM Studio, Gemini CLI, llama.cpp, an app that doesn't give its name, and the 2026-07-28 protocol, where the app's name comes with each request. Each answer named the right app and carried the right privacy note. The tool definitions were in the portable form, and everything refused before was still refused.
 - **The installer, on stand-in Windows and Mac profiles** with every supported app present:
   - one entry added to each settings file (JSON, VS Code's `servers`, Codex's TOML), each file backed up first
@@ -131,6 +131,8 @@ What was run for 1.5.0 (nightly):
   - asked to run the self-test, the model called status, the playbook and the self-test, and reported 27 of 27 passed
   - asked for a vocal chain, it planned, then ran every stage; after a yes, it balanced the vocal against the beat. Its summaries matched the tools' own numbers
   - on the build machine's 2 processor cores, each answer took one to seven minutes; a PC with more cores or a graphics card is much quicker
+  - the first answer got quicker: the Local AI now gets short descriptions of the longest tools, so the model reads about 15% less before its first answer (180 seconds instead of 249 on the build machine)
+  - the model sometimes carried on to the next step without being asked (balancing after a vocal chain); its instructions now say to stop and offer the next step
   - one problem found and fixed: by default llama.cpp keeps up to 8 GB of earlier conversations in memory, and it ran out of memory there. Start Local AI now caps that at 1 GB, and the same conversation then ran to the end
 - **Not run here:**
   - llama.cpp's Windows and Mac builds (the same release, built for those systems)

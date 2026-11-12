@@ -7720,6 +7720,7 @@ def scenario_ai_apps():
         ok, st = c.call("status")
         instr = instructions(c)
         tools = c.tools()
+        full_text = {t["name"]: t["description"] for t in tools}
         check("an app that does not say its name: answers keep saying 'your AI app', and nothing claims it is Claude",
               ok and "did not say its name" in st.get("ai_app", "") and "Claude" not in instr and "Anthropic" not in instr
               and not [t for t in st.get("to_do", []) if "Claude" in t], (st.get("ai_app"), instr[:200]))
@@ -7777,7 +7778,20 @@ def scenario_ai_apps():
 
     c = _client_as(sb, {"name": "llama.cpp", "version": "1.0"}, extra_env={"RAPREAPER_TOOLS": "core"}, protocol="2024-11-05")
     try:
-        tools = [t["name"] for t in c.tools()]
+        core_listed = c.tools()
+        tools = [t["name"] for t in core_listed]
+        size = sum(len(t["description"]) + len(json.dumps(t["inputSchema"])) for t in core_listed)
+        shorter = [t["name"] for t in core_listed if t["description"] != full_text.get(t["name"])]
+        words = lambda t: set(re.findall(r"\b[a-z]+_[a-z_]+\b", t["description"]))
+        unknown = sorted((t["name"], w) for t in core_listed if t["name"] in shorter
+                         for w in words(t) if w not in t["inputSchema"].get("properties", {}) and w not in tools
+                         and w not in ("hard_tune", "deep_voice", "not_set", "eq_clean", "eq_tone", "beat_eq", "loudness_targets",
+                                       "vocal_frequencies", "de_essing", "reverb_and_delay", "autotune_and_keys", "mix_order",
+                                       "doubles_and_adlibs", "beat_and_vocal", "note_values", "key_info", "mix_log", "song_setups"))
+        check("with RAPREAPER_TOOLS=core the longest tool descriptions come in a short form (a small model reads them all before "
+              "its first answer): under 21,000 characters in all, each still at least a sentence, and every option a short "
+              "description names is one the tool has", size < 21000 and len(shorter) >= 10 and not unknown
+              and all(len(t["description"]) >= 40 for t in core_listed), (size, shorter, unknown))
         ok, st = c.call("status")
         okp, pb = c.call("playbook")
         core_doc = open(os.path.join(os.path.dirname(HERE), "kit", "PLAYBOOK-CORE.md"), encoding="utf-8").read()

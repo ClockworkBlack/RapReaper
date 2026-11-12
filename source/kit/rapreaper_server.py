@@ -12270,10 +12270,66 @@ def _portable(schema):
     return out
 
 
+# A small model on the person's own computer reads every tool description before its first answer, and on a processor
+# without a graphics card that reading is most of the wait (measured with the Local AI: about 4 minutes for 7,800
+# tokens on 2 cores). With RAPREAPER_TOOLS=core the longest descriptions are given in this short form; the options'
+# own descriptions, the playbook and each answer carry the rest. Every other app gets the full descriptions.
+CORE_BRIEF = {
+    "self_test": "Prove on this computer that RapReaper works: adds a muted test track with a quiet tone, sets the stock "
+                 "plug-ins and the fader in real units, and checks each by measurement. Returns PASS/FAIL per check with "
+                 "the fix. It runs in parts: while the result says finished false, call self_test again with the same "
+                 "arguments, and report only when it says finished true.",
+    "what_plays": "Which tracks sound at a project time (seconds) or over a range (start_seconds, end_seconds): the "
+                  "clips there, each track's level and voice effects, and the effect tracks they feed.",
+    "vocal_chain": "Build or re-fit a vocal chain in measured stages, one call each, in this order: 'plan' (measures the "
+                   "raw vocal; changes nothing), 'cleanup', 'compress', 'tone', 'deess', 'finish' (matches loudness, gives "
+                   "the before/after table, saves the chain). Each stage adds stock REAPER plug-ins, measures before and "
+                   "after, and is one undo step. To change a result, run that stage again with one of the options, then "
+                   "the later stages again too.",
+    "measure": "Render part of one track (after its plug-ins and fader) or the master and measure it: loudness (LUFS), "
+               "true peak, noise, tone balance and a list of problems in plain words. Leaves the project as it was.",
+    "set_plugin": "Set controls on one plug-in in real units and read them back. settings is {control name: value}, with "
+                  "values as typed in the plug-in window: '-18 dB', '300 Hz', '4', '25 ms', 'on'/'off'. plugin is part of "
+                  "the plug-in's name ('ReaComp'), its position number, or a RapReaper slot name (hpf, eq_clean, expander, "
+                  "comp1, comp2, eq_tone, deess, trim, beat_eq, limiter). Call track_details first for the exact control "
+                  "names. A control that cannot take the value is listed under not_set.",
+    "level_match": "Measure several vocal tracks as they sit in the mix and set each to one loudness: target_lufs, or "
+                   "match_to (a track to match), or by default the middle of the group. Without apply it only reports.",
+    "master_loudness": "Measure the whole mix and (with apply=true) add a limiter on the master fitted to a loudness "
+                       "target: 'streaming' (-14 LUFS), 'competitive' (-10), 'loud' (-8) or a number. Without apply it "
+                       "only reports what is needed.",
+    "export_mix": "Bounce the song to a new file in RapReaper's 'exports' folder: a 24-bit WAV, plus MP3 and/or M4A "
+                  "copies (formats) when asked; whole, or a part (start_seconds, end_seconds). Measures the result "
+                  "(loudness, true peak, phone speaker, mono). Never overwrites. dry_run true writes nothing.",
+    "cut_empty_air": "Find the pauses in a vocal track (room tone, breaths, lip noise between lines) and cut them out of "
+                     "the clips with short fades, as one undoable edit. Without apply it only lists what it would cut: "
+                     "show that list and wait for the person's yes before apply true.",
+    "restore_clips": "Put a track's clips back as they were before an earlier RapReaper cut (RapReaper keeps a restore "
+                     "point before every cut), as one undoable step.",
+    "voice_effect": "Put a creative effect on a vocal track with REAPER's stock plug-ins: 'autotune' or 'hard_tune' "
+                    "(needs key and scale), 'pitch', 'deep_voice', 'chipmunk', 'doubler', 'telephone', 'megaphone', "
+                    "'grit', 'chorus', 'reverb', 'delay', 'remove' (take effects off again), 'list'. amount 1-3 sets how "
+                    "strong.",
+    "song_tempo_and_key": "Measure the tempo (BPM) and the key of the beat: a track in the project (the beat when no "
+                          "track is named) or a file in the references folder. Needed before autotune and timed delays.",
+    "reference_card": "A card of mix-engineering facts kept on this computer. topic: loudness_targets, "
+                      "vocal_frequencies, compression, de_essing, reverb_and_delay, autotune_and_keys, mix_order, "
+                      "doubles_and_adlibs, beat_and_vocal, recording, glossary, commands, phones, note_values (needs "
+                      "bpm), key_info (needs key). Use it instead of answering such questions from memory.",
+    "privacy": "What leaves this computer and what stays: action 'show' gives the privacy level, the record of every "
+               "answer sent, and what RapReaper stores here with sizes; 'set' changes level (standard, strict, maximum), "
+               "expire_days or activity_log; 'clear' removes stored files (exports, references, mix_log and song_setups "
+               "only with confirm true after the person agreed). Audio never leaves the computer.",
+}
+
+
 def _public(t):
     if "_published_schema" not in t:
         t["_published_schema"] = _portable(t["inputSchema"])
-    return {"name": t["name"], "title": t["title"], "description": t["description"],
+    description = t["description"]
+    if tool_profile() == "core":
+        description = CORE_BRIEF.get(t["name"], description)
+    return {"name": t["name"], "title": t["title"], "description": description,
             "inputSchema": t["_published_schema"], "annotations": t["annotations"]}
 
 

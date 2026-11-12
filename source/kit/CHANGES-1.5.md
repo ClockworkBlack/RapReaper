@@ -27,5 +27,9 @@ tone, de-ess and finish on its own, and after a yes balanced the vocal against t
 tools' numbers. On those 2 cores an answer took one to seven minutes. One problem found: llama.cpp keeps earlier
 conversations' state in memory, up to 8 GB by default, and ran out of memory there (the model itself takes about 4 GB
 with a 32k context); Start Local AI now passes `--cache-ram 1024`, and the same conversation then ran to the end
-(5.6 GB at most, including the model file's pages). The Windows and Mac builds of llama.cpp were not run (no such
+(5.6 GB at most, including the model file's pages). Two changes followed from that run. With `RAPREAPER_TOOLS=core` the 14 longest tool descriptions are published in a
+short form (`CORE_BRIEF`; every other app keeps the full ones): the model's first prompt went from 7,799 to 6,647
+tokens and its first answer from 249 to 180 seconds on those 2 cores. And the model went on from a finished vocal
+chain to balancing against the beat without being asked, so the chat window's system message and `PLAYBOOK-CORE.md`
+now say to stop after what was asked and offer the next step. The Windows and Mac builds of llama.cpp were not run (no such
 computer); the launcher's handling of them was tested with a stand-in llama-server.

@@ -1493,6 +1493,7 @@ LOCAL_AI_SYSTEM = (
     "names them without that start: 'status' is rapreaper_status). At the start of every conversation call "
     "rapreaper_status, then rapreaper_playbook, and follow the playbook. Say a change was made only when a tool result "
     "shows it. Before anything that cuts, removes, mutes or saves, show the plan and wait for the person's yes. "
+    "Do what the person asked for, then stop: say what was done and suggest the next step instead of taking it. "
     "Answer briefly, in plain words, with the numbers the tools give.")
 
 
