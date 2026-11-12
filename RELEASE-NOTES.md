@@ -124,6 +124,7 @@ What was run for 1.5.0 (nightly):
   - every installed file matched the 1.5.0 checksum list
   - the Local AI's files were in place, and the new installer connected Claude
 - **The unchanged parts are the same files:** the Vocal Remover programs and Microsoft's libraries in the three zips are byte for byte the ones in 1.4.7.
+- **GitHub rebuilt it from source:** GitHub's own build of this commit (with Go 1.27.3 rebuilding the Vocal Remover programs) made three zips whose every file is byte for byte the one in the published zips. Only the compression of the zip files differs.
 - **No personal data:** every file of the three zips (programs and PDFs included) and the zips' own metadata were searched. There are no names, e-mail addresses, folder paths, account names or keys of anyone's, and no e-mail address that 1.4.7 didn't already carry (those are third-party licence authors and the tests' invented people).
 - **Not run here:**
   - the real llama.cpp program and the Qwen model (the build environment doesn't run programs downloaded from the internet)
