@@ -409,11 +409,14 @@ What 1.5.0 (nightly) changed (12 November 2026)
     data in the instructions and the short playbook, anything that removes or silences audio needs a plan and then
     apply/confirm, every change is one undo step, cuts keep restore points, and nothing is saved without the
     person's word; the chat window's question before each tool call is the person's own check.
-  - Not run here: the real llama.cpp program and the real model (the build environment does not run programs
-    downloaded from the internet). Tested instead: llama.cpp's MCP client's handshake and calls as written in its
-    source (protocol 2024-11-05, clientInfo "llama.cpp"), a stand-in llama-server for the launcher (ports, the
-    processor fallback, refused files), and the pinned checksums of every archive and model, computed here from the
-    downloaded files.
+  - Run here, with the person's go-ahead: the real llama-server (b12250, the Linux build of the same release) with
+    the real Qwen 3.5 4B file, RapReaper as its MCP server exactly as Start Local AI writes it, and a simulated REAPER.
+    Its start-up found all 28 tools; driven the way the chat window drives it (every tool call allowed), the model
+    ran the self-test (27 of 27), put the whole vocal chain on a vocal and balanced it against the beat, and its
+    summaries matched the tools' numbers. llama.cpp's default memory for earlier conversations (8 GB) made it run out
+    of memory there (about 6 GB for programs), so Start Local AI caps it at 1 GB (--cache-ram). Also tested: a stand-in
+    llama-server for the launcher (ports, the processor fallback, refused files), and the pinned checksums of every
+    archive and model, computed here from the downloaded files. Not run here: the Windows and Mac builds themselves.
 
 What 1.4.7 (nightly) changed (9 November 2026)
 ----------------------------------------------

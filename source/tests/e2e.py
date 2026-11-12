@@ -8034,7 +8034,7 @@ def scenario_local_ai():
     check("Start Local AI: llama-server gets the model, RapReaper as its MCP server, the chat window's defaults, this computer "
           "only, a 32k context, one slot, thinking off",
           rc == 0 and args[args.index("-m") + 1] == model and args[args.index("--host") + 1] == "127.0.0.1"
-          and args[args.index("--port") + 1] == "8077" and args[args.index("-c") + 1] == "32768" and args[args.index("-np") + 1] == "1"
+          and args[args.index("--port") + 1] == "8077" and args[args.index("-c") + 1] == "32768" and args[args.index("-np") + 1] == "1" and args[args.index("--cache-ram") + 1] == "1024"
           and args[args.index("--reasoning") + 1] == "off" and "--jinja" in args
           and args[args.index("--mcp-servers-config") + 1].endswith("mcp.json") and args[args.index("--ui-config-file") + 1].endswith("ui.json"),
           (rc, args, out[-500:]))

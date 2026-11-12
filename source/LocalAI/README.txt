@@ -32,7 +32,8 @@ What to expect
 
   - It is slower and less careful than the big online AI models (Claude, ChatGPT). Without a good graphics card, and on
     an Intel Mac, the first answer of a chat can take a few minutes, because the model first reads RapReaper's tool
-    descriptions; later answers come faster.
+    descriptions; later answers come faster. Running on the processor, the 4B model takes about 4 GB of memory, the 9B
+    about 7 GB: close other programs on a computer with 8 GB.
   - The chat window asks before every RapReaper tool runs (Allow, Always allow, or Deny). Say yes only to what you
     asked for. RapReaper's own rules still hold: a plan before any cut, every change one step in REAPER's undo history,
     nothing saved unless you ask.

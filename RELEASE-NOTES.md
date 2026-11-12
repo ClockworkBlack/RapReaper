@@ -43,7 +43,7 @@ RapReaper works with any AI app, and comes with an AI of its own.
 
 Nothing changes in how you mix. The helper inside REAPER is 1.5.0 (only its version line changed), and the Vocal Remover is unchanged (2.0.3). Everything from 1.4.7 (nightly) is included; it's listed below.
 
-**Still open:** the real llama.cpp program and the real model weren't run in the build environment, which doesn't run programs downloaded from the internet. So your first Local AI session is its first real run. Run the self-test in it, and report what the model does. The optional BS-Roformer model still can't be rebuilt byte for byte from its public checkpoint, and the Intel Mac Vocal Remover hasn't run on a real Intel Mac.
+**Tested with the real model:** the real llama.cpp server and the Qwen 3.5 4B model drove RapReaper on a simulated REAPER: they passed the self-test (27 of 27), put a whole vocal chain on a vocal, and balanced it against the beat. The Windows and Mac builds of llama.cpp haven't run on a real PC or Mac yet, so run the self-test in your first Local AI session. Still open: the optional BS-Roformer model still can't be rebuilt byte for byte from its public checkpoint, and the Intel Mac Vocal Remover hasn't run on a real Intel Mac.
 
 ## What was new in 1.4.7 (nightly)
 
@@ -93,9 +93,9 @@ On both systems, double-click **Get Vocal Remover Model** afterwards to get the 
 The result must match the file's line in `SHA256SUMS.txt`:
 
 ```
-57926c716c5ef3e7f55e7de02e0518338e0a9daef1aad7a2182b238cd6d04a3a  RapReaper-1.5.0-Mac-Intel.zip
-6587b5c63fb68d35c87b209c272180dd808e9a430b51c44ccbe1d3da7ee2d19a  RapReaper-1.5.0-Mac.zip
-02c772f26b4a85a880975487ab9eea22bf17b0a94746d6f0bf4c0c8c0a4d25c1  RapReaper-1.5.0-Windows.zip
+7f0d84d9a40a828dbee3b838472306a5f58c2686e02028e712e6ef254b1d19f8  RapReaper-1.5.0-Mac-Intel.zip
+9d8b222e6eded7b8df3b283d6e89b6cf7a2ac1727fd2dd2714527cf615be4ac8  RapReaper-1.5.0-Mac.zip
+e2edf1b08cf12d6abe5900bb5460bfaeff2392848aa9bcf3575a12f11b08d4c3  RapReaper-1.5.0-Windows.zip
 ```
 
 ## How this build was tested
@@ -126,8 +126,14 @@ What was run for 1.5.0 (nightly):
 - **The unchanged parts are the same files:** the Vocal Remover programs and Microsoft's libraries in the three zips are byte for byte the ones in 1.4.7.
 - **GitHub rebuilt it from source:** GitHub's own build of this commit (with Go 1.27.3 rebuilding the Vocal Remover programs) made three zips whose every file is byte for byte the one in the published zips. Only the compression of the zip files differs.
 - **No personal data:** every file of the three zips (programs and PDFs included) and the zips' own metadata were searched. There are no names, e-mail addresses, folder paths, account names or keys of anyone's, and no e-mail address that 1.4.7 didn't already carry (those are third-party licence authors and the tests' invented people).
+- **The real Local AI, end to end.** The real llama-server (b12250, the Linux build of the same release) with the real Qwen 3.5 4B file, RapReaper as its MCP server exactly as Start Local AI sets it up, and the simulated REAPER, driven the way llama.cpp's chat window drives it:
+  - its start-up found all 28 RapReaper tools
+  - asked to run the self-test, the model called status, the playbook and the self-test, and reported 27 of 27 passed
+  - asked for a vocal chain, it planned, then ran every stage; after a yes, it balanced the vocal against the beat. Its summaries matched the tools' own numbers
+  - on the build machine's 2 processor cores, each answer took one to seven minutes; a PC with more cores or a graphics card is much quicker
+  - one problem found and fixed: by default llama.cpp keeps up to 8 GB of earlier conversations in memory, and it ran out of memory there. Start Local AI now caps that at 1 GB, and the same conversation then ran to the end
 - **Not run here:**
-  - the real llama.cpp program and the Qwen model (the build environment doesn't run programs downloaded from the internet)
+  - llama.cpp's Windows and Mac builds (the same release, built for those systems)
   - RapReaper with the real AI apps and REAPER on a real PC or Mac (as with every release; the self-test checks the main points on your own REAPER)
   - a real Intel Mac
 

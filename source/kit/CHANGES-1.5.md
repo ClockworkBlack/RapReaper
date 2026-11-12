@@ -19,7 +19,13 @@ unchanged (2.0.3). New files: `kit/PLAYBOOK-CORE.md`, `kit/CHANGES-1.5.md`, `Get
 `Start Local AI.bat`, `Get Local AI.command`, `Start Local AI.command`, `LocalAI/README.txt`, `LocalAI/licenses/`,
 `LocalAI/runtime-b12250.json`, and the empty `LocalAI/runtime` and `LocalAI/models` (kept by the updater).
 
-Not run in the build environment: the real llama.cpp program and the real model (programs downloaded from the
-internet are not run there). The archives and the 4B model were downloaded and their checksums computed there; the
-launcher was tested with a stand-in llama-server, and RapReaper's server with llama.cpp's MCP handshake and calls as
-written in its source (protocol 2024-11-05, clientInfo "llama.cpp", one process kept between calls).
+Run in the build environment (Linux, 2 processor cores, about 6 GB of memory for programs): the real llama-server b12250 with the real Qwen 3.5 4B
+file, RapReaper as its MCP server exactly as Start Local AI configures it, against the simulated REAPER, driven the
+way llama.cpp's chat window drives it. Its start-up listed all 28 tools; the model called status, the playbook and
+the self-test (27 of 27 passed) and reported them truthfully; asked for a vocal chain it ran plan, cleanup, compress,
+tone, de-ess and finish on its own, and after a yes balanced the vocal against the beat, with summaries that match the
+tools' numbers. On those 2 cores an answer took one to seven minutes. One problem found: llama.cpp keeps earlier
+conversations' state in memory, up to 8 GB by default, and ran out of memory there (the model itself takes about 4 GB
+with a 32k context); Start Local AI now passes `--cache-ram 1024`, and the same conversation then ran to the end
+(5.6 GB at most, including the model file's pages). The Windows and Mac builds of llama.cpp were not run (no such
+computer); the launcher's handling of them was tested with a stand-in llama-server.

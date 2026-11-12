@@ -1485,6 +1485,7 @@ if os.environ.get("RAPREAPER_LOCAL_AI_MODEL_LIST"):          # (the tests: a sta
         LOCAL_AI_MODEL_LIST = json.load(_f)
 LOCAL_AI_PORTS = tuple(range(8077, 8087))
 LOCAL_AI_CONTEXT = 32768               # tokens the model keeps in mind (Qwen 3.5's few full-attention layers keep this small)
+LOCAL_AI_CACHE_MB = 1024              # llama.cpp's memory for earlier conversations (its default, 8 GB, ran out in testing)
 LOCAL_AI_STATE = os.path.join(KIT, "state", "local_ai")
 LOCAL_AI_SYSTEM = (
     "You are RapReaper's Local AI: a mix engineer and a patient teacher for a beginner who records rap vocals at home in "
@@ -1746,7 +1747,10 @@ def run_local_ai(think=False, cpu=False, no_browser=False):
     log_path = os.path.join(LOCAL_AI_STATE, "llama-server.log")
     base = [local_ai_server(), "-m", os.path.join(LOCAL_AI_MODELS, st["model"]), "--mcp-servers-config", mcp,
             "--ui-config-file", ui, "--host", "127.0.0.1", "-c", str(LOCAL_AI_CONTEXT), "-np", "1", "--jinja",
-            "--reasoning", "on" if think else "off", "--alias", "RapReaper Local AI (%s)" % st["label"]]
+            "--reasoning", "on" if think else "off", "--alias", "RapReaper Local AI (%s)" % st["label"],
+            # llama.cpp keeps earlier conversations' state in memory, up to 8 GB by default: with about 6 GB free that ran
+            # out of memory in testing (the 4B model alone takes about 4 GB with a 32k context), so 1 GB at most
+            "--cache-ram", str(LOCAL_AI_CACHE_MB)]
     tries = [cpu] if cpu else [False, True]            # (a graphics driver that fails: once more, processor only)
     tools_retry = True                                 # (llama.cpp got no tools from RapReaper in time: once more)
     for use_cpu in tries:

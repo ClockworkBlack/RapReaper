@@ -1,4 +1,4 @@
 # RapReaper 1.5.0 (Vocal Remover 2.0.3): SHA-256 of the delivered files
-57926c716c5ef3e7f55e7de02e0518338e0a9daef1aad7a2182b238cd6d04a3a  RapReaper-1.5.0-Mac-Intel.zip
-6587b5c63fb68d35c87b209c272180dd808e9a430b51c44ccbe1d3da7ee2d19a  RapReaper-1.5.0-Mac.zip
-02c772f26b4a85a880975487ab9eea22bf17b0a94746d6f0bf4c0c8c0a4d25c1  RapReaper-1.5.0-Windows.zip
+7f0d84d9a40a828dbee3b838472306a5f58c2686e02028e712e6ef254b1d19f8  RapReaper-1.5.0-Mac-Intel.zip
+9d8b222e6eded7b8df3b283d6e89b6cf7a2ac1727fd2dd2714527cf615be4ac8  RapReaper-1.5.0-Mac.zip
+e2edf1b08cf12d6abe5900bb5460bfaeff2392848aa9bcf3575a12f11b08d4c3  RapReaper-1.5.0-Windows.zip
